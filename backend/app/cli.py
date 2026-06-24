@@ -15,8 +15,11 @@ def main() -> None:
     elif cmd == "reset-seed":
         from app.seed.seed import seed
         seed(force=True)
+    elif cmd == "bootstrap-admin":
+        from app.seed.seed import bootstrap_admin
+        bootstrap_admin()
     else:
-        print("usage: python -m app.cli [migrate|seed|reset-seed]")
+        print("usage: python -m app.cli [migrate|seed|reset-seed|bootstrap-admin]")
         sys.exit(1)
 
 

@@ -401,5 +401,28 @@ def _ensure_users(conn, sample_child=None, sample_staff=None) -> None:
     print("[seed] demo users ensured (admin@lait.org.uk + 1 per role)")
 
 
+def bootstrap_admin() -> None:
+    """Production-safe: create ONLY the admin user from env (no demo data).
+
+    Requires migrations to have run (roles exist). Idempotent on email.
+    """
+    with psycopg.connect(_dsn()) as conn:
+        exists = conn.execute("SELECT 1 FROM users WHERE email=%s", (settings.ADMIN_EMAIL,)).fetchone()
+        if exists:
+            print(f"[bootstrap] admin {settings.ADMIN_EMAIL} already exists; skipping")
+            return
+        role = conn.execute("SELECT id FROM roles WHERE slug='admin'").fetchone()
+        if not role:
+            raise RuntimeError("admin role missing — run migrations first")
+        conn.execute(
+            "INSERT INTO users (email,full_name,hashed_password,role_id,is_active) "
+            "VALUES (%s,%s,%s,%s,TRUE)",
+            (settings.ADMIN_EMAIL, "Platform Administrator",
+             hash_password(settings.ADMIN_PASSWORD), role[0]),
+        )
+        conn.commit()
+        print(f"[bootstrap] created admin {settings.ADMIN_EMAIL}")
+
+
 if __name__ == "__main__":
     seed()
