@@ -6,9 +6,10 @@ returns the computed analytics payload for one module, scoped by role.
 """
 from __future__ import annotations
 
+import time
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,9 +18,15 @@ from app.analytics.registry import compute_module
 from app.core.database import get_db
 from app.core.deps import get_current_user, get_user_permissions
 from app.models.auth import DashboardModule, DashboardWidget, RoleWidgetAccess, User
+from app.models.dimensions import Site
 from app.schemas.auth import MeDashboard, ModuleWithWidgets, RoleOut, UserOut, WidgetOut
 
 router = APIRouter(prefix="/dashboards", tags=["dashboards"])
+
+# Tiny in-process TTL cache so re-navigation / refresh is instant. Keyed by the
+# user + module + active filters; short TTL keeps data fresh.
+_CACHE: dict[tuple, tuple[float, dict]] = {}
+_TTL_SECONDS = 20
 
 
 @router.get("/me", response_model=MeDashboard)
@@ -65,20 +72,55 @@ async def my_dashboards(user: User = Depends(get_current_user), db: AsyncSession
     )
 
 
+@router.get("/filters")
+async def available_filters(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict:
+    """Filter options for the dashboard toolbar, scoped to what the user may see."""
+    scope = scope_for(user)
+    stmt = select(Site.id, Site.name, Site.borough).order_by(Site.name)
+    if scope.site_id:
+        stmt = stmt.where(Site.id == scope.site_id)
+    sites = [{"id": r.id, "name": r.name, "borough": r.borough} for r in (await db.execute(stmt)).all()]
+    return {
+        "sites": sites,
+        "can_pick_site": scope.all_sites,
+        "periods": [
+            {"value": 7, "label": "7 days"},
+            {"value": 30, "label": "30 days"},
+            {"value": 90, "label": "90 days"},
+            {"value": 365, "label": "12 months"},
+        ],
+        "default_period": 90,
+    }
+
+
 @router.get("/{module_key}/data")
 async def module_data(
     module_key: str,
+    site_id: int | None = Query(None, description="Filter to one site (privileged roles only)"),
+    days: int | None = Query(None, description="Period window: 7|30|90|180|365"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     perms = await get_user_permissions(user, db)
     if f"view.{module_key}" not in perms:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not permitted for this module")
-    scope = scope_for(user)
-    data = await compute_module(module_key, db, scope)
+    scope = scope_for(user, site_id=site_id, days=days)
+
+    cache_key = (user.id, module_key, scope.site_id, scope.child_id, scope.window_days)
+    now = time.monotonic()
+    hit = _CACHE.get(cache_key)
+    if hit and now - hit[0] < _TTL_SECONDS:
+        data, cached = hit[1], True
+    else:
+        data = await compute_module(module_key, db, scope)
+        _CACHE[cache_key] = (now, data)
+        cached = False
+
     return {
         "module": module_key,
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "scope": {"site_id": scope.site_id, "child_id": scope.child_id, "all_sites": scope.all_sites},
+        "cached": cached,
+        "scope": {"site_id": scope.site_id, "child_id": scope.child_id,
+                  "all_sites": scope.all_sites, "window_days": scope.window_days},
         "data": data,
     }

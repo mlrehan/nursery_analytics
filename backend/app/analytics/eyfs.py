@@ -28,7 +28,8 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
     if obs.empty:
         return _empty()
 
-    obs30 = int((pd.to_datetime(obs["observation_date"]).dt.date >= (today - dt.timedelta(days=30))).sum())
+    win = scope.window_days
+    obs_recent = int((pd.to_datetime(obs["observation_date"]).dt.date >= (today - dt.timedelta(days=win))).sum())
 
     # latest status per child+area, then % on track
     obs_sorted = obs.sort_values("observation_date")
@@ -66,7 +67,7 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
 
     return {
         "eyfs.on_track": gauge(on_track_pct, "Children On Track"),
-        "eyfs.observations": kpi(obs30, "Observations", sub="last 30 days"),
+        "eyfs.observations": kpi(obs_recent, "Observations", sub=f"last {win} days"),
         "eyfs.at_risk": kpi(at_risk, "At-Risk Children", status="warn" if at_risk else "ok"),
         "eyfs.by_area": by_area,
         "eyfs.by_age": by_age,

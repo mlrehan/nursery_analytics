@@ -14,7 +14,7 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
     p = scope.params
     sc = scope.site_clause()
 
-    cap_df = await fetch_df(db, f"SELECT COALESCE(SUM(capacity),0) AS cap FROM dim_site WHERE 1=1 {scope.site_clause()}", p)
+    cap_df = await fetch_df(db, f"SELECT COALESCE(SUM(capacity),0) AS cap FROM dim_site WHERE 1=1 {scope.site_pk_clause()}", p)
     capacity = int(cap_df["cap"].iloc[0])
 
     children = await fetch_df(

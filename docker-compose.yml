@@ -8,7 +8,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nursery_dev_pw}
       POSTGRES_DB: ${POSTGRES_DB:-nursery_analytics}
     ports:
-      - "5432:5432"
+      # host:container — host 5498 avoids clashing with a local Postgres on 5432.
+      # Connect from pgAdmin on your machine at  localhost:5498
+      - "${POSTGRES_HOST_PORT:-5498}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -25,7 +27,13 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
+      # Inside the compose network the backend always reaches Postgres at db:5432
+      # (the 5498 mapping above is only for tools on your host machine).
       POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      # the command below already runs migrate+seed once; don't repeat on reload
+      RUN_MIGRATIONS_ON_STARTUP: "false"
+      SEED_ON_STARTUP: "false"
     depends_on:
       db:
         condition: service_healthy

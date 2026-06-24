@@ -23,7 +23,7 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
 
     # overhead (monthly) for scoped sites
     ov = await fetch_df(
-        db, f"SELECT COALESCE(SUM(monthly_overhead),0) AS ov FROM dim_site WHERE 1=1 {scope.site_clause()}", scope.params)
+        db, f"SELECT COALESCE(SUM(monthly_overhead),0) AS ov FROM dim_site WHERE 1=1 {scope.site_pk_clause()}", scope.params)
     overhead = float(ov["ov"].iloc[0])
     profit = round(billed_mtd - payroll - overhead, 2)
 
@@ -46,7 +46,7 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
         f"""SELECT s.name,
                    (SELECT COUNT(*) FROM dim_child c WHERE c.site_id=s.id AND c.status='active') AS filled,
                    s.capacity
-            FROM dim_site s WHERE 1=1 {scope.site_clause('s')} ORDER BY s.name""",
+            FROM dim_site s WHERE 1=1 {scope.site_pk_clause('s')} ORDER BY s.name""",
         scope.params,
     )
     site_bar = {"categories": [], "series": [{"name": "Occupancy %", "data": []}]}
@@ -70,17 +70,29 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
 
     staff_status = "Safe" if stf["_ratio_compliance"] >= 100 else "At risk"
 
+    # sparklines + month-over-month deltas from real series
+    rev_spark = [v for v in hist if v is not None][-8:]
+    rev_delta = None
+    if len(rev_spark) >= 2 and rev_spark[-2]:
+        rev_delta = (rev_spark[-1] - rev_spark[-2]) / rev_spark[-2] * 100
+    occ_hist = occ.get("occ.forecast", {}).get("series", [{}])[0].get("data") or []
+    occ_spark = [v for v in occ_hist if v is not None][-8:]
+
     return {
-        "exec.enrolled": kpi(filled, "Enrolled", sub=f"of {capacity} capacity"),
+        "exec.enrolled": kpi(filled, "Enrolled", sub=f"of {capacity} capacity", accent="blue",
+                             spark=occ_spark or None),
         "exec.occupancy": gauge(occ["_rate"], "Occupancy"),
-        "exec.revenue_mtd": kpi(billed_mtd, "Revenue (MTD)", unit="£"),
-        "exec.arrears": kpi(arrears, "Arrears", unit="£", status="warn" if arrears > 0 else "ok"),
+        "exec.revenue_mtd": kpi(billed_mtd, "Revenue (MTD)", unit="£", accent="emerald",
+                                spark=rev_spark or None, delta=rev_delta, sub="vs last month"),
+        "exec.arrears": kpi(arrears, "Arrears", unit="£", status="warn" if arrears > 0 else "ok",
+                            accent="amber"),
         "exec.revenue_trend": rev_trend,
         "exec.profit": kpi(profit, "Profit Estimate (MTD)", unit="£",
-                           status="ok" if profit >= 0 else "warn", sub="income − payroll − overhead"),
-        "exec.waitlist": kpi(occ["_waitlist"], "Waiting List"),
+                           status="ok" if profit >= 0 else "warn", sub="income − payroll − overhead",
+                           accent="violet"),
+        "exec.waitlist": kpi(occ["_waitlist"], "Waiting List", accent="cyan"),
         "exec.staff_status": kpi(staff_status, "Staff Coverage",
-                                 status="ok" if staff_status == "Safe" else "warn"),
+                                 status="ok" if staff_status == "Safe" else "warn", accent="orange"),
         "exec.alerts": {"columns": ["Area", "Detail", "Severity"], "rows": alerts},
         "exec.site_breakdown": site_bar,
     }

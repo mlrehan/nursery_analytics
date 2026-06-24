@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react'
 import * as echarts from 'echarts'
 
-/** Thin, theme-aware wrapper around Apache ECharts. */
-export default function EChart({ option, height = 300, className = '' }) {
+/** Thin, theme-aware wrapper around Apache ECharts with optional click events. */
+export default function EChart({ option, height = 300, className = '', onEvents }) {
   const ref = useRef(null)
   const chart = useRef(null)
 
@@ -15,10 +15,16 @@ export default function EChart({ option, height = 300, className = '' }) {
   }, [])
 
   useEffect(() => {
-    if (chart.current && option) {
-      chart.current.setOption(option, true)
+    const c = chart.current
+    if (!c || !option) return
+    c.setOption(option, true)
+    if (onEvents) {
+      Object.entries(onEvents).forEach(([evt, fn]) => {
+        c.off(evt)
+        c.on(evt, fn)
+      })
     }
-  }, [option])
+  }, [option, onEvents])
 
   return <div ref={ref} style={{ height, width: '100%' }} className={className} />
 }
