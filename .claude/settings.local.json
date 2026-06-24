@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la)",
+      "Bash(docker --version)",
+      "Bash(git --version)"
+    ]
+  }
+}

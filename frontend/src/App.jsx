@@ -1,0 +1,31 @@
+import { Navigate, Route, Routes } from 'react-router-dom'
+import { useAuth } from './context/AuthContext'
+import Layout from './components/Layout'
+import Login from './pages/Login'
+import Dashboard from './pages/Dashboard'
+import AdminConfig from './pages/AdminConfig'
+
+function Protected({ children, adminOnly }) {
+  const { user, loading, isAdmin } = useAuth()
+  if (loading) {
+    return <div className="min-h-screen grid place-items-center muted">Loading…</div>
+  }
+  if (!user) return <Navigate to="/login" replace />
+  if (adminOnly && !isAdmin) return <Navigate to="/" replace />
+  return children
+}
+
+export default function App() {
+  const { user } = useAuth()
+  return (
+    <Routes>
+      <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
+      <Route element={<Protected><Layout /></Protected>}>
+        <Route path="/" element={<div className="muted">Loading your dashboards…</div>} />
+        <Route path="/m/:moduleKey" element={<Dashboard />} />
+        <Route path="/admin" element={<Protected adminOnly><AdminConfig /></Protected>} />
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  )
+}
