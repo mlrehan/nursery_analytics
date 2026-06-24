@@ -19,7 +19,8 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
     win_lbl = f"last {win} days"
     att = await fetch_df(
         db,
-        f"""SELECT a.date, a.status, a.late_pickup, a.room_id, r.name AS room_name, r.room_type
+        f"""SELECT a.date, a.status, a.late_pickup, a.check_in, a.check_out, a.room_id,
+                   r.name AS room_name, r.room_type
             FROM fact_attendance a LEFT JOIN dim_room r ON r.id = a.room_id
             WHERE a.date >= :dwin {scope.site_clause('a')} {child_clause.replace('child_id','a.child_id')}""",
         {**p, "dwin": today - dt.timedelta(days=win)},
@@ -65,8 +66,20 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
                 val = round(safe_div((sub["status"] == "present").sum(), len(sub)) * 100, 0) if len(sub) else 0
                 heat["data"].append([xi, yi, int(val)])
 
+    # utilisation by session: average AM vs PM headcount (spot afternoon gaps)
+    present = attw[attw["status"] == "present"].copy()
+    time_of_day = {"categories": ["Morning (AM)", "Afternoon (PM)"], "series": [{"name": "Avg children present", "data": [0, 0]}]}
+    if not present.empty:
+        n_days = present["date"].nunique() or 1
+        ci = pd.to_datetime(present["check_in"])
+        co = pd.to_datetime(present["check_out"])
+        am = int((ci.dt.hour < 13).sum())
+        pm = int((co.dt.hour >= 14).sum())
+        time_of_day["series"][0]["data"] = [round(am / n_days, 1), round(pm / n_days, 1)]
+
     return {
         "att.present": kpi(present_today, "Present Today", accent="cyan", spark=spark),
+        "att.time_of_day": time_of_day,
         "att.rate": gauge(rate, "Attendance Rate"),
         "att.absent": kpi(absent_today, "Absent Today", status="warn" if absent_today else "ok", accent="amber"),
         "att.late": kpi(late, "Late Pickups", sub=win_lbl, accent="violet"),
@@ -83,5 +96,6 @@ def _empty() -> dict:
         "att.absent": kpi(0, "Absent Today"), "att.late": kpi(0, "Late Pickups"),
         "att.trend": {"x": [], "series": [{"name": "Attendance %", "data": []}]},
         "att.absence_mix": {"data": []}, "att.heatmap": {"x": [], "y": [], "data": [], "max": 100},
+        "att.time_of_day": {"categories": ["Morning (AM)", "Afternoon (PM)"], "series": [{"name": "Avg children present", "data": [0, 0]}]},
         "_present_today": 0, "_rate": 0,
     }

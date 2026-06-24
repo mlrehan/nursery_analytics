@@ -4,6 +4,8 @@ import Layout from './components/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import AdminConfig from './pages/AdminConfig'
+import AdminUsers from './pages/AdminUsers'
+import Profile from './pages/Profile'
 
 function Protected({ children, adminOnly }) {
   const { user, loading, isAdmin } = useAuth()
@@ -23,7 +25,9 @@ export default function App() {
       <Route element={<Protected><Layout /></Protected>}>
         <Route path="/" element={<div className="muted">Loading your dashboards…</div>} />
         <Route path="/m/:moduleKey" element={<Dashboard />} />
+        <Route path="/profile" element={<Profile />} />
         <Route path="/admin" element={<Protected adminOnly><AdminConfig /></Protected>} />
+        <Route path="/admin/users" element={<Protected adminOnly><AdminUsers /></Protected>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

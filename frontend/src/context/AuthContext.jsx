@@ -35,8 +35,14 @@ export function AuthProvider({ children }) {
     window.location.href = '/login'
   }
 
+  const refreshUser = useCallback(async () => {
+    const { data } = await api.get('/auth/me')
+    setUser(data)
+    return data
+  }, [])
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, isAdmin: user?.role?.slug === 'admin' }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser, setUser, isAdmin: user?.role?.slug === 'admin' }}>
       {children}
     </AuthContext.Provider>
   )

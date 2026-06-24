@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { FilterProvider } from '../context/FilterContext'
 import Icon from './Icon'
+import SearchBox from './SearchBox'
 
 function ThemeBtn() {
   const { dark, toggle } = useTheme()
@@ -39,6 +40,7 @@ export default function Layout() {
   const initials = (user?.full_name || 'U').split(' ').map((w) => w[0]).slice(0, 2).join('')
 
   return (
+    <FilterProvider>
     <div className="min-h-screen flex">
       {/* Sidebar */}
       <aside className={`fixed lg:static z-30 h-screen w-64 shrink-0 flex flex-col transition-transform
@@ -66,13 +68,20 @@ export default function Layout() {
             </NavLink>
           ))}
           {isAdmin && (
-            <NavLink to="/admin" onClick={() => setOpen(false)}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 mt-2 rounded-xl text-sm font-medium border-t hairline pt-3 ${
+            <div className="mt-2 border-t hairline pt-3 space-y-0.5">
+              <NavLink to="/admin/users" onClick={() => setOpen(false)}
+                className={({ isActive }) => `flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium ${
                   isActive ? 'text-blue-500' : 'muted hover:text-[var(--text)]'}`}>
-              <Icon name="cog" className="w-[18px] h-[18px]" />
-              <span>Dashboard Settings</span>
-            </NavLink>
+                <Icon name="users" className="w-[18px] h-[18px]" />
+                <span>User Management</span>
+              </NavLink>
+              <NavLink to="/admin" onClick={() => setOpen(false)} end
+                className={({ isActive }) => `flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium ${
+                  isActive ? 'text-blue-500' : 'muted hover:text-[var(--text)]'}`}>
+                <Icon name="cog" className="w-[18px] h-[18px]" />
+                <span>Roles & Dashboards</span>
+              </NavLink>
+            </div>
           )}
         </nav>
         <div className="p-4 border-t hairline text-xs muted">v1.0 · {modules.length} dashboards</div>
@@ -87,30 +96,28 @@ export default function Layout() {
           <button className="lg:hidden btn-ghost p-2" onClick={() => setOpen(true)}>
             <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
           </button>
-          <div className="hidden md:flex items-center gap-2 flex-1 max-w-md">
-            <div className="surface-2 flex items-center gap-2 px-3 py-2 w-full">
-              <svg className="w-4 h-4 muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>
-              <input placeholder="Search metrics, reports, insights…" className="bg-transparent outline-none text-sm w-full muted" />
-            </div>
-          </div>
+          <div className="hidden md:flex flex-1 max-w-md"><SearchBox /></div>
           <div className="flex items-center gap-2 ml-auto">
             <ThemeBtn />
-            <div className="hidden sm:flex flex-col items-end mr-1">
-              <span className="text-sm font-semibold leading-tight">{user?.full_name}</span>
-              <span className="text-[11px] muted capitalize">{user?.role?.name}</span>
-            </div>
-            <div className="w-9 h-9 rounded-full grid place-items-center text-white text-xs font-bold"
-              style={{ background: 'linear-gradient(135deg,#3b82f6,#4f46e5)' }}>{initials}</div>
+            <NavLink to="/profile" className="flex items-center gap-2 rounded-xl px-1.5 py-1 hover:bg-[var(--surface-2)] transition" title="My profile">
+              <div className="hidden sm:flex flex-col items-end mr-1">
+                <span className="text-sm font-semibold leading-tight">{user?.full_name}</span>
+                <span className="text-[11px] muted capitalize">{user?.role?.name}</span>
+              </div>
+              <div className="w-9 h-9 rounded-full overflow-hidden grid place-items-center text-white text-xs font-bold"
+                style={{ background: 'linear-gradient(135deg,#3b82f6,#4f46e5)' }}>
+                {user?.avatar_url ? <img src={user.avatar_url} alt="" className="w-full h-full object-cover" /> : initials}
+              </div>
+            </NavLink>
             <button onClick={logout} className="btn-ghost text-sm">Sign out</button>
           </div>
         </header>
 
         <main className="flex-1 p-4 lg:p-6 overflow-x-hidden">
-          <FilterProvider>
-            <Outlet context={{ modules }} />
-          </FilterProvider>
+          <Outlet context={{ modules }} />
         </main>
       </div>
     </div>
+    </FilterProvider>
   )
 }

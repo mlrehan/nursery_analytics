@@ -56,6 +56,12 @@ class User(Base, TimestampMixin):
     linked_staff_id: Mapped[int | None] = mapped_column(ForeignKey("dim_staff.id"))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_login_at: Mapped[datetime | None] = mapped_column()
+    # profile (self-service)
+    phone: Mapped[str | None] = mapped_column(String(40))
+    job_title: Mapped[str | None] = mapped_column(String(120))
+    address: Mapped[str | None] = mapped_column(Text)
+    about: Mapped[str | None] = mapped_column(Text)
+    avatar_url: Mapped[str | None] = mapped_column(Text)
 
     role: Mapped["Role"] = relationship(back_populates="users")
 

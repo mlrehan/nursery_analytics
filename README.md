@@ -39,6 +39,24 @@ On first boot the backend automatically:
 3. seeds realistic demo data (3 London sites, rooms, ~150 children, staff, and
    12 months of facts) + the demo users below.
 
+## Documentation
+
+| Guide | For |
+|---|---|
+| [docs/REPORTS_GUIDE.md](docs/REPORTS_GUIDE.md) | What every dashboard & report means and **why** it matters (plain English) |
+| [docs/DATABASE.md](docs/DATABASE.md) | Every table explained — what it stores and why |
+| [docs/DATA_INTEGRATION.md](docs/DATA_INTEGRATION.md) | Map **your** nursery data in (Excel/CSV, database, or API) |
+| [DEPLOYMENT.md](DEPLOYMENT.md) | Running in development & production |
+
+## Administration (admin role)
+
+- **User Management** (`/admin/users`): create/edit/delete users, assign roles,
+  reset passwords, activate/deactivate.
+- **Roles & Dashboards** (`/admin`): grant module access (permissions) per role and
+  switch individual report cards on/off per role.
+- **Profiles** (`/profile`, all users): contact details, address, about, avatar.
+- **Search** (top bar): jump to dashboards, sites, children or staff (role-scoped).
+
 ## Demo accounts
 
 | Role        | Email                      | Password      | Sees |

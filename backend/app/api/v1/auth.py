@@ -13,7 +13,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user, get_user_permissions
 from app.core.security import create_access_token, create_refresh_token, decode_token, verify_password
 from app.models.auth import User
-from app.schemas.auth import LoginRequest, RefreshRequest, Token, UserOut
+from app.schemas.auth import LoginRequest, ProfileUpdate, RefreshRequest, Token, UserOut
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -65,6 +65,26 @@ async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)) -
 
 @router.get("/me", response_model=UserOut)
 async def me(user: User = Depends(get_current_user)) -> User:
+    return user
+
+
+@router.put("/me/profile", response_model=UserOut)
+async def update_profile(
+    payload: ProfileUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Any signed-in user can maintain their own profile (contact, address, about, avatar)."""
+    data = payload.model_dump(exclude_unset=True)
+    if "email" in data and data["email"]:
+        data["email"] = data["email"].lower()
+        clash = await db.scalar(select(User).where(User.email == data["email"], User.id != user.id))
+        if clash:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already in use")
+    for field, value in data.items():
+        setattr(user, field, value)
+    await db.commit()
+    await db.refresh(user, attribute_names=["role"])
     return user
 
 

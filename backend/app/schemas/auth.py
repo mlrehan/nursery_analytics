@@ -35,8 +35,15 @@ class UserOut(BaseModel):
     full_name: str
     role: RoleOut
     site_id: int | None = None
+    linked_child_id: int | None = None
+    linked_staff_id: int | None = None
     is_active: bool
     last_login_at: datetime | None = None
+    phone: str | None = None
+    job_title: str | None = None
+    address: str | None = None
+    about: str | None = None
+    avatar_url: str | None = None
 
 
 class UserCreate(BaseModel):
@@ -45,6 +52,47 @@ class UserCreate(BaseModel):
     password: str
     role_id: int
     site_id: int | None = None
+    phone: str | None = None
+    job_title: str | None = None
+
+
+class UserAdminUpdate(BaseModel):
+    full_name: str | None = None
+    email: EmailStr | None = None
+    role_id: int | None = None
+    site_id: int | None = None
+    linked_child_id: int | None = None
+    linked_staff_id: int | None = None
+    is_active: bool | None = None
+    phone: str | None = None
+    job_title: str | None = None
+
+
+class PasswordSet(BaseModel):
+    password: str
+
+
+class ProfileUpdate(BaseModel):
+    full_name: str | None = None
+    email: EmailStr | None = None
+    phone: str | None = None
+    job_title: str | None = None
+    address: str | None = None
+    about: str | None = None
+    avatar_url: str | None = None   # data URL or http URL
+
+
+class PermissionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    code: str
+    description: str | None = None
+
+
+class RolePermissionToggle(BaseModel):
+    role_id: int
+    code: str
+    granted: bool
 
 
 # ─── Dashboard config ─────────────────────────────────────────────────────────

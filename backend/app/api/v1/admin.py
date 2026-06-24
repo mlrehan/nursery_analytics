@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -12,11 +12,22 @@ from app.core.security import hash_password
 from app.models.auth import (
     DashboardModule,
     DashboardWidget,
+    Permission,
     Role,
+    RolePermission,
     RoleWidgetAccess,
     User,
 )
-from app.schemas.auth import RoleOut, RoleWidgetToggle, UserCreate, UserOut
+from app.schemas.auth import (
+    PasswordSet,
+    PermissionOut,
+    RoleOut,
+    RolePermissionToggle,
+    RoleWidgetToggle,
+    UserAdminUpdate,
+    UserCreate,
+    UserOut,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -102,8 +113,104 @@ async def create_user(payload: UserCreate, db: AsyncSession = Depends(get_db)) -
         email=payload.email.lower(), full_name=payload.full_name,
         hashed_password=hash_password(payload.password),
         role_id=payload.role_id, site_id=payload.site_id, is_active=True,
+        phone=payload.phone, job_title=payload.job_title,
     )
     db.add(user)
     await db.commit()
     await db.refresh(user, attribute_names=["role"])
     return user
+
+
+@router.put("/users/{user_id}", response_model=UserOut)
+async def update_user(user_id: int, payload: UserAdminUpdate, db: AsyncSession = Depends(get_db)) -> User:
+    user = await db.scalar(select(User).where(User.id == user_id).options(selectinload(User.role)))
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    data = payload.model_dump(exclude_unset=True)
+    if "email" in data and data["email"]:
+        data["email"] = data["email"].lower()
+        clash = await db.scalar(select(User).where(User.email == data["email"], User.id != user_id))
+        if clash:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already in use")
+    for field, value in data.items():
+        setattr(user, field, value)
+    await db.commit()
+    await db.refresh(user, attribute_names=["role"])
+    return user
+
+
+@router.post("/users/{user_id}/password")
+async def set_password(user_id: int, payload: PasswordSet, db: AsyncSession = Depends(get_db)) -> dict:
+    user = await db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if len(payload.password) < 6:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Password too short")
+    user.hashed_password = hash_password(payload.password)
+    await db.commit()
+    return {"ok": True}
+
+
+@router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: int,
+    admin_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    if user_id == admin_user.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot delete your own account")
+    user = await db.scalar(select(User).where(User.id == user_id).options(selectinload(User.role)))
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if user.role and user.role.slug == "admin":
+        admin_count = await db.scalar(
+            select(func.count()).select_from(User).join(Role).where(Role.slug == "admin", User.is_active.is_(True))
+        )
+        if admin_count <= 1:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete the last admin")
+    await db.delete(user)
+    await db.commit()
+    return {"ok": True}
+
+
+# ─── Roles & permissions ──────────────────────────────────────────────────────
+@router.get("/permissions", response_model=list[PermissionOut])
+async def list_permissions(db: AsyncSession = Depends(get_db)) -> list[Permission]:
+    return list((await db.scalars(select(Permission).order_by(Permission.code))).all())
+
+
+@router.get("/roles/{role_id}/permissions")
+async def role_permissions(role_id: int, db: AsyncSession = Depends(get_db)) -> dict:
+    role = await db.get(Role, role_id)
+    if role is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+    granted = set((await db.scalars(
+        select(Permission.code).join(RolePermission, RolePermission.permission_id == Permission.id)
+        .where(RolePermission.role_id == role_id)
+    )).all())
+    all_perms = (await db.scalars(select(Permission).order_by(Permission.code))).all()
+    return {
+        "role": RoleOut.model_validate(role),
+        "permissions": [
+            {"code": p.code, "description": p.description, "granted": p.code in granted}
+            for p in all_perms
+        ],
+    }
+
+
+@router.post("/roles/permissions")
+async def toggle_role_permission(payload: RolePermissionToggle, db: AsyncSession = Depends(get_db)) -> dict:
+    perm = await db.scalar(select(Permission).where(Permission.code == payload.code))
+    if perm is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Permission not found")
+    existing = await db.scalar(
+        select(RolePermission).where(
+            (RolePermission.role_id == payload.role_id) & (RolePermission.permission_id == perm.id)
+        )
+    )
+    if payload.granted and existing is None:
+        db.add(RolePermission(role_id=payload.role_id, permission_id=perm.id))
+    elif not payload.granted and existing is not None:
+        await db.delete(existing)
+    await db.commit()
+    return {"role_id": payload.role_id, "code": payload.code, "granted": payload.granted}

@@ -19,7 +19,7 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
 
     children = await fetch_df(
         db,
-        f"""SELECT c.id, c.status, c.dob, r.room_type
+        f"""SELECT c.id, c.status, c.dob, c.funding_type, r.room_type
             FROM dim_child c LEFT JOIN dim_room r ON r.id = c.room_id
             WHERE 1=1 {scope.site_clause('c')}""",
         p,
@@ -96,9 +96,17 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
         forecast_payload["series"][0]["data"] = occ_vals + [None] * 6
         forecast_payload["series"][1]["data"] = [None] * (len(occ_vals) - 1) + [occ_vals[-1]] + [round(v, 1) for v in fc]
 
+    # funding mix (UK free-hours): private / 15h / 30h
+    funding_labels = {"private": "Private", "funded_15": "15h funded", "funded_30": "30h funded"}
+    funding_payload = {"data": []}
+    if not active.empty and "funding_type" in active:
+        fc = active["funding_type"].fillna("private").value_counts()
+        funding_payload = {"data": [{"name": funding_labels.get(k, k), "value": int(v)} for k, v in fc.items()]}
+
     return {
         "occ.capacity": kpi(filled, "Filled vs Capacity", sub=f"of {capacity} places"),
         "occ.rate": gauge(rate, "Occupancy"),
+        "occ.funding": funding_payload,
         "occ.admissions": kpi(adm, "New Admissions", sub="last 30 days"),
         "occ.withdrawals": kpi(wd, "Withdrawals", sub="last 30 days"),
         "occ.by_room": by_room_payload,

@@ -90,6 +90,15 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
             per_room["categories"].append(rt.capitalize())
             per_room["series"][0]["data"].append(round(float(grp.get(rt, 0)), 2))
 
+    # funding mix + revenue per child (UK free-hours context)
+    ch = await fetch_df(
+        db, f"SELECT funding_type, COUNT(*) AS n FROM dim_child WHERE status='active' {sc} GROUP BY funding_type", p)
+    funding_labels = {"private": "Private", "funded_15": "15h funded", "funded_30": "30h funded"}
+    funding_pie = {"data": [{"name": funding_labels.get(r["funding_type"], r["funding_type"] or "Private"),
+                             "value": int(r["n"])} for _, r in ch.iterrows()]} if not ch.empty else {"data": []}
+    active_count = int(ch["n"].sum()) if not ch.empty else 0
+    rev_per_child = round(billed_mtd / active_count, 2) if active_count else 0
+
     # late payment alerts table
     overdue = inv[inv["status"] == "overdue"].copy()
     rows = []
@@ -111,6 +120,8 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
         "fin.breakdown": breakdown,
         "fin.per_room": per_room,
         "fin.late_alerts": late_table,
+        "fin.funding": funding_pie,
+        "fin.rev_per_child": kpi(rev_per_child, "Revenue per Child", unit="£", accent="emerald", sub="monthly average"),
         "fin.revenue_trend": rev_trend,
         "_billed_mtd": round(billed_mtd, 2), "_arrears": round(arrears, 2),
         "_rev_trend": rev_trend,
@@ -126,6 +137,8 @@ def _empty() -> dict:
         "fin.breakdown": {"categories": [], "series": [], "stack": True},
         "fin.per_room": {"categories": [], "series": []},
         "fin.late_alerts": {"columns": ["Child", "Amount", "Overdue", "Status"], "rows": []},
+        "fin.funding": {"data": []},
+        "fin.rev_per_child": {"value": 0, "label": "Revenue per Child", "unit": "£"},
         "fin.revenue_trend": {"x": [], "series": [{"name": "Billed £", "data": []}]},
         "_billed_mtd": 0, "_arrears": 0, "_rev_trend": {"x": [], "series": [{"name": "Billed £", "data": []}]},
     }

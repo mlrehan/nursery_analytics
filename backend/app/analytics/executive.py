@@ -90,6 +90,8 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
         "exec.profit": kpi(profit, "Profit Estimate (MTD)", unit="£",
                            status="ok" if profit >= 0 else "warn", sub="income − payroll − overhead",
                            accent="violet"),
+        "exec.rev_per_child": kpi(round(billed_mtd / filled, 2) if filled else 0, "Revenue per Child",
+                                  unit="£", accent="emerald", sub="monthly average"),
         "exec.waitlist": kpi(occ["_waitlist"], "Waiting List", accent="cyan"),
         "exec.staff_status": kpi(staff_status, "Staff Coverage",
                                  status="ok" if staff_status == "Safe" else "warn", accent="orange"),

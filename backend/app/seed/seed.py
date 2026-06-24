@@ -23,9 +23,14 @@ FIRST_NAMES = ["Olivia", "Noah", "Amelia", "Oliver", "Isla", "George", "Ava", "A
 LAST_NAMES = ["Smith", "Patel", "Jones", "Khan", "Williams", "Brown", "Taylor", "Davies",
               "Wilson", "Evans", "Nguyen", "Okafor", "Ahmed", "Murphy", "Walsh", "Adeyemi",
               "Kowalski", "Rossi", "Garcia", "Chen"]
-BOROUGHS = [("Camden Bright Beginnings", "Camden", "NW1 8NH"),
-            ("Hackney Little Explorers", "Hackney", "E8 3RL"),
-            ("Wandsworth Tiny Steps", "Wandsworth", "SW18 4GQ")]
+# name, borough, postcode, fill_factor, pay_health, incident_factor
+# (varied so the multi-site ranking and benchmarking are realistic: Camden thrives,
+#  Islington struggles with occupancy + arrears, etc.)
+BOROUGHS = [("Camden Bright Beginnings", "Camden", "NW1 8NH", 0.95, 0.97, 0.8),
+            ("Hackney Little Explorers", "Hackney", "E8 3RL", 0.90, 0.93, 1.0),
+            ("Wandsworth Tiny Steps", "Wandsworth", "SW18 4GQ", 0.88, 0.95, 0.9),
+            ("Islington Acorns Nursery", "Islington", "N1 2AB", 0.76, 0.85, 1.5),
+            ("Greenwich Meadow Daycare", "Greenwich", "SE10 9LS", 0.84, 0.90, 1.1)]
 ROOM_DEFS = [("Baby Room", "baby", 9, 3), ("Toddler Room", "toddler", 16, 4),
              ("Preschool Room", "preschool", 24, 8)]
 
@@ -91,7 +96,8 @@ def seed(force: bool = False) -> None:
 
         # Sites
         site_ids = []
-        for name, borough, postcode in BOROUGHS:
+        profile_by_site: dict[int, tuple[float, float, float]] = {}
+        for name, borough, postcode, fill, pay_health, inc_factor in BOROUGHS:
             cap = int(ROOM_DEFS[0][2] + ROOM_DEFS[1][2] + ROOM_DEFS[2][2])
             overhead = float(RNG.integers(28000, 42000))
             sid = cur.execute(
@@ -100,6 +106,7 @@ def seed(force: bool = False) -> None:
                 (name, borough, postcode, cap, dt.date(2018, 9, 1), overhead),
             ).fetchone()[0]
             site_ids.append(sid)
+            profile_by_site[sid] = (fill, pay_health, inc_factor)
 
         # Rooms
         room_by_site: dict[int, list[tuple[int, str, int, int]]] = {}
@@ -140,13 +147,15 @@ def seed(force: bool = False) -> None:
             staff_by_site[sid] = staff_ids
 
         # Parents + Children
-        child_records = []  # (id, site_id, room_id, status, monthly_fee, funding, enrollment_date, room_type)
+        # tuple: (id, site_id, room_id, status, monthly_fee, funding, enrollment_date, room_type, part_time)
+        child_records = []
         for sid in site_ids:
             rooms = room_by_site[sid]
+            fill = profile_by_site[sid][0]
             for rid, rtype, rcap, ratio in rooms:
-                # fill ~85-95% of capacity active, plus waitlist + a few withdrawn
-                n_active = int(round(rcap * float(RNG.uniform(0.82, 0.96))))
-                n_wait = int(RNG.integers(1, 5))
+                # fill scaled by the site's occupancy profile (capped at capacity)
+                n_active = min(rcap, int(round(rcap * fill * float(RNG.uniform(0.96, 1.04)))))
+                n_wait = int(RNG.integers(2, 8))
                 n_withdrawn = int(RNG.integers(0, 3))
                 for status, count in (("active", n_active), ("waitlist", n_wait), ("withdrawn", n_withdrawn)):
                     for _ in range(count):
@@ -182,8 +191,9 @@ def seed(force: bool = False) -> None:
                              enroll if status != "waitlist" else None, status, funding_type,
                              monthly_fee, allergy),
                         ).fetchone()[0]
+                        part_time = bool(RNG.random() < 0.22)  # ~1 in 5 attend mornings only
                         child_records.append((cid, sid, rid, status, monthly_fee,
-                                              funding_type, enroll, rtype))
+                                              funding_type, enroll, rtype, part_time))
 
         active_children = [c for c in child_records if c[3] == "active"]
         print(f"[seed] {len(child_records)} children ({len(active_children)} active), "
@@ -191,9 +201,9 @@ def seed(force: bool = False) -> None:
 
         _seed_enrollment_events(cur, child_records)
         _seed_attendance(cur, active_children)
-        _seed_invoices_payments(cur, active_children)
+        _seed_invoices_payments(cur, active_children, profile_by_site)
         _seed_shifts(cur, all_staff, room_by_site)
-        _seed_incidents(cur, active_children, site_ids)
+        _seed_incidents(cur, active_children, site_ids, profile_by_site)
         _seed_eyfs(cur, active_children)
         _seed_meals(cur, active_children)
         _seed_messages(cur, site_ids, staff_by_site)
@@ -207,7 +217,7 @@ def seed(force: bool = False) -> None:
 # ─── fact generators ─────────────────────────────────────────────────────────
 def _seed_enrollment_events(cur, child_records) -> None:
     rows = []
-    for cid, sid, _rid, status, _fee, _fund, enroll, _rt in child_records:
+    for cid, sid, _rid, status, _fee, _fund, enroll, _rt, *_ in child_records:
         if status == "waitlist":
             rows.append((cid, sid, "enquiry", TODAY - dt.timedelta(days=int(RNG.integers(5, 60)))))
             rows.append((cid, sid, "waitlist_join", TODAY - dt.timedelta(days=int(RNG.integers(1, 30)))))
@@ -220,16 +230,32 @@ def _seed_enrollment_events(cur, child_records) -> None:
         "INSERT INTO fact_enrollment_event (child_id,site_id,event_type,event_date) VALUES (%s,%s,%s,%s)", rows)
 
 
+def _seasonal_factor(d: dt.date) -> float:
+    """Lower attendance during typical UK holiday periods (Aug, late Dec, half-terms)."""
+    if d.month == 8:
+        return 0.78                      # summer holidays
+    if d.month == 12 and d.day >= 18:
+        return 0.6                       # Christmas break
+    if d.month == 4 and d.day <= 14:
+        return 0.85                      # Easter break
+    if (d.month, d.day) in [(2, x) for x in range(12, 19)]:
+        return 0.88                      # Feb half-term
+    return 1.0
+
+
 def _seed_attendance(cur, active_children) -> None:
     days = _weekdays(TODAY - dt.timedelta(days=120), TODAY)
     rows = []
-    for cid, sid, rid, *_ in active_children:
+    for cid, sid, rid, _st, _fee, _fund, _enr, _rt, part_time in active_children:
         base_rate = float(RNG.uniform(0.86, 0.97))
         for d in days:
-            present = RNG.random() < base_rate
+            present = RNG.random() < base_rate * _seasonal_factor(d)
             if present:
                 ci = dt.datetime.combine(d, dt.time(8, 0)) + dt.timedelta(minutes=int(RNG.integers(0, 90)))
-                co = dt.datetime.combine(d, dt.time(17, 0)) + dt.timedelta(minutes=int(RNG.integers(-30, 75)))
+                if part_time:
+                    co = dt.datetime.combine(d, dt.time(12, 30)) + dt.timedelta(minutes=int(RNG.integers(-15, 30)))
+                else:
+                    co = dt.datetime.combine(d, dt.time(17, 0)) + dt.timedelta(minutes=int(RNG.integers(-30, 75)))
                 late = co.time() > dt.time(18, 0)
                 rows.append((cid, sid, rid, d, "present", ci, co, late))
             else:
@@ -240,13 +266,11 @@ def _seed_attendance(cur, active_children) -> None:
         "VALUES (%s,%s,%s,%s,%s,%s,%s,%s)", rows)
 
 
-def _seed_invoices_payments(cur, active_children) -> None:
+def _seed_invoices_payments(cur, active_children, profile_by_site) -> None:
     months = _month_starts(12)
-    inv_rows = []
-    # invoice rows first (need ids for payments) -> insert per child/month with RETURNING is slow;
-    # batch insert then fetch ids via RETURNING using executemany is not supported, so loop inserts.
     pay_rows = []
-    for cid, sid, _rid, _st, fee, funding, enroll, _rt in active_children:
+    for cid, sid, _rid, _st, fee, funding, enroll, _rt, *_ in active_children:
+        pay_health = profile_by_site[sid][1]
         funding_amt = {"funded_30": fee * 0.45, "funded_15": fee * 0.22, "private": 0.0}.get(funding, 0.0)
         for m in months:
             if enroll and m < enroll.replace(day=1):
@@ -255,14 +279,14 @@ def _seed_invoices_payments(cur, active_children) -> None:
             due = m + dt.timedelta(days=7)
             discount = round(fee * 0.05, 2) if RNG.random() < 0.12 else 0.0
             net = round(fee - funding_amt - discount, 2)
-            # status depends on recency
+            # status depends on recency and the site's payment health
             age_months = (TODAY.year - m.year) * 12 + (TODAY.month - m.month)
             if age_months >= 2:
-                status = "paid" if RNG.random() < 0.96 else "overdue"
+                status = "paid" if RNG.random() < (0.985 * pay_health + 0.01) else "overdue"
             elif age_months == 1:
-                status = "paid" if RNG.random() < 0.82 else RNG.choice(["unpaid", "overdue", "partial"])
+                status = "paid" if RNG.random() < (0.9 * pay_health) else RNG.choice(["unpaid", "overdue", "partial"])
             else:
-                status = "paid" if RNG.random() < 0.45 else RNG.choice(["unpaid", "partial"])
+                status = "paid" if RNG.random() < (0.7 * pay_health) else RNG.choice(["unpaid", "partial"])
             paid_date = None
             if status == "paid":
                 paid_date = due + dt.timedelta(days=int(RNG.integers(-3, 10)))
@@ -304,11 +328,14 @@ def _seed_shifts(cur, all_staff, room_by_site) -> None:
         "overtime_hours,absent,absence_reason) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)", rows)
 
 
-def _seed_incidents(cur, active_children, site_ids) -> None:
+def _seed_incidents(cur, active_children, site_ids, profile_by_site) -> None:
     rows = []
     n = int(len(active_children) * 0.6)
     for _ in range(n):
         cid, sid, *_ = active_children[int(RNG.integers(0, len(active_children)))]
+        inc_factor = profile_by_site[sid][2]
+        if RNG.random() > min(0.6 * inc_factor, 0.95):   # sites with higher factor log more incidents
+            continue
         itype = str(RNG.choice(["accident", "incident", "safeguarding", "medication"], p=[0.5, 0.25, 0.1, 0.15]))
         sev = str(RNG.choice(["low", "medium", "high"], p=[0.6, 0.3, 0.1]))
         reported = TODAY - dt.timedelta(days=int(RNG.integers(0, 180)))
