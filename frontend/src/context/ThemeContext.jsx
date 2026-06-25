@@ -16,7 +16,7 @@ export function ThemeProvider({ children }) {
   }, [dark])
 
   return (
-    <ThemeContext.Provider value={{ dark, toggle: () => setDark((d) => !d) }}>
+    <ThemeContext.Provider value={{ dark, setDark, toggle: () => setDark((d) => !d) }}>
       {children}
     </ThemeContext.Provider>
   )

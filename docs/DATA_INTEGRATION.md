@@ -4,11 +4,11 @@ This is a step-by-step, non-technical-friendly guide to replacing the demo data 
 your nursery’s real data. There are **three ways** to feed the platform — pick the one
 that matches what your current system offers:
 
-| You have… | Use method |
-|---|---|
-| Spreadsheets / exports | **A — Excel/CSV import** (easiest) |
-| Direct access to your management-system database | **B — Database-to-database** |
-| An API from your nursery software (e.g. Famly, Blossom, iConnect) | **C — API sync** |
+| You have…                                                         | Use method                         |
+|-------------------------------------------------------------------|------------------------------------|
+| Spreadsheets / exports                                            | **A — Excel/CSV import** (easiest) |
+| Direct access to your management-system database                  | **B — Database-to-database**       |
+| An API from your nursery software (e.g. Famly, Blossom, iConnect) | **C — API sync**                   |
 
 All three load into the **same tables** described in [DATABASE.md](DATABASE.md). Once
 data is in those tables, **every dashboard works automatically** — no code changes.

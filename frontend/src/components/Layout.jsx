@@ -139,7 +139,7 @@ export default function Layout() {
 
       {/* Right column — header fixed, only main scrolls */}
       <div className="flex-1 flex flex-col min-w-0 h-screen">
-        <header className="h-16 shrink-0 flex items-center gap-3 px-4 lg:px-6 bg-[var(--surface)] border-b hairline">
+        <header className="app-header h-16 shrink-0 flex items-center gap-3 px-4 lg:px-6 bg-[var(--surface)] border-b hairline">
           <button className="lg:hidden btn-ghost p-2" onClick={() => setOpen(true)}>
             <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
           </button>
@@ -159,7 +159,7 @@ export default function Layout() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+        <main className="app-main flex-1 overflow-y-auto p-4 lg:p-6">
           <Outlet context={{ modules }} />
         </main>
       </div>

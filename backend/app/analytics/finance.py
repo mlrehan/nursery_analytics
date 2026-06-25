@@ -48,21 +48,29 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
     paid_attempts = pay.loc[~pay["is_refund"]] if not pay.empty else pay
     success_rate = pct(safe_div(int(paid_attempts["success"].sum()), len(paid_attempts)) * 100) if not paid_attempts.empty else 100.0
 
-    outstanding = inv[inv["status"].isin(["unpaid", "overdue", "partial"])]
-    arrears = float(outstanding["amount"].sum())
+    # True outstanding = billed − payments received (so 'partial' invoices only count
+    # their unpaid balance, not the whole amount). This is the correct receivable.
+    paid_by_inv = await fetch_df(
+        db, f"SELECT invoice_id, SUM(amount) AS paid FROM fact_payment "
+            f"WHERE success = TRUE AND is_refund = FALSE {sc} GROUP BY invoice_id", p)
+    paid_map = dict(zip(paid_by_inv["invoice_id"], paid_by_inv["paid"].astype(float))) if not paid_by_inv.empty else {}
+    inv["paid"] = inv["id"].map(paid_map).fillna(0.0)
+    inv["outstanding"] = (inv["amount"] - inv["paid"]).clip(lower=0)
+    outstanding = inv[inv["outstanding"] > 0.01]
+    arrears = float(outstanding["outstanding"].sum())
 
     # paid vs unpaid pie
     status_counts = inv["status"].value_counts()
     pie = {"data": [{"name": s.capitalize(), "value": int(c)} for s, c in status_counts.items()]}
 
-    # aged receivables buckets
+    # aged receivables buckets (by unpaid balance, not full invoice)
     aged = {"categories": ["0-30d", "31-60d", "61-90d", "90d+"], "series": [{"name": "Outstanding £", "data": [0, 0, 0, 0]}]}
     if not outstanding.empty:
         due = pd.to_datetime(outstanding["due_date"]).dt.date
         age_days = np.array([(today - d).days for d in due])
         buckets = pd.cut(age_days, bins=[-9999, 30, 60, 90, 999999],
                          labels=["0-30d", "31-60d", "61-90d", "90d+"])
-        grp = outstanding.assign(bucket=buckets).groupby("bucket", observed=False)["amount"].sum()
+        grp = outstanding.assign(bucket=buckets).groupby("bucket", observed=False)["outstanding"].sum()
         aged["series"][0]["data"] = [round(float(grp.get(b, 0)), 2) for b in aged["categories"]]
 
     # revenue breakdown stacked (last 12 months): net private + funding + discount
@@ -98,16 +106,16 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
     active_count = int(ch["n"].sum()) if not ch.empty else 0
     rev_per_child = round(billed_mtd / active_count, 2) if active_count else 0
 
-    # late payment alerts table
-    overdue = inv[inv["status"] == "overdue"].copy()
+    # late payment alerts table — overdue invoices that still have a balance
+    overdue = inv[(inv["status"] == "overdue") & (inv["outstanding"] > 0.01)].copy()
     rows = []
     if not overdue.empty:
         overdue["child"] = overdue["first_name"] + " " + overdue["last_name"]
-        overdue = overdue.sort_values("amount", ascending=False).head(15)
+        overdue = overdue.sort_values("outstanding", ascending=False).head(15)
         for _, r in overdue.iterrows():
             days_over = (today - r["due_date"]).days if isinstance(r["due_date"], dt.date) else 0
-            rows.append([r["child"], f"£{float(r['amount']):,.2f}", f"{days_over}d", r["status"].capitalize()])
-    late_table = {"columns": ["Child", "Amount", "Overdue", "Status"], "rows": rows}
+            rows.append([r["child"], f"£{float(r['outstanding']):,.2f}", f"{days_over}d", r["status"].capitalize()])
+    late_table = {"columns": ["Child", "Outstanding", "Overdue", "Status"], "rows": rows}
 
     return {
         "fin.billed": kpi(round(billed_mtd, 2), "Billed This Month", unit="£", sub="this calendar month"),

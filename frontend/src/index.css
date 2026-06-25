@@ -99,6 +99,26 @@ body {
 .accent-cyan    { color:#22d3ee; background:rgba(6,182,212,.16);  --stripe:linear-gradient(90deg,#0891b2,#22d3ee); }
 .accent-orange  { color:#fb923c; background:rgba(249,115,22,.16); --stripe:linear-gradient(90deg,#ea580c,#fb923c); }
 
+/* ─── Print / PDF (A4, clean, decision-ready) ─────────────────────────────── */
+.print-only { display: none; }
+@media print {
+  @page { size: A4; margin: 14mm; }
+  html, body { height: auto !important; background: #fff !important; }
+  .dark body { background: #fff !important; }
+  :root, .dark { --text: #0b1220; --muted: #4b5563; --surface: #fff; --surface-2: #fff; --border: #c9d2e3; }
+  /* hide app chrome */
+  aside, .no-print { display: none !important; }
+  header.app-header { display: none !important; }
+  /* let the content flow across pages */
+  .app-main { overflow: visible !important; height: auto !important; padding: 0 !important; }
+  /* cards: crisp borders, never split across a page */
+  .surface { box-shadow: none !important; border: 1px solid #c9d2e3 !important; break-inside: avoid; page-break-inside: avoid; }
+  .accent-top::before { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  .print-only { display: block !important; }
+  .print-grid { display: grid !important; grid-template-columns: repeat(12, 1fr) !important; gap: 10px !important; grid-auto-rows: auto !important; }
+}
+
 ::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--muted) 32%, transparent); border-radius: 9999px; }
 ::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--muted) 50%, transparent); }
