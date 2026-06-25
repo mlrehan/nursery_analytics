@@ -150,8 +150,8 @@ This stack is built to **coexist** with software already on the server:
 
 | Already on host | Our stack | Conflict? |
 |---|---|---|
-| **PostgreSQL** on 5432 | our DB on `127.0.0.1:15432` (loopback only) | **No** |
-| **NGINX/Apache** on 80/443 | our app on `127.0.0.1:8080` (the host NGINX proxies to it) | **No** |
+| **PostgreSQL** on 5432 | our DB on `${DB_HOST_PORT:-15432}` | **No** |
+| **NGINX/Apache** on 80/443 | our app on `${FRONTEND_HOST_PORT:-8080}` (browse it directly, or proxy from host NGINX) | **No** |
 | — | backend is internal-only (never published) | — |
 
 All host ports are env-driven (`FRONTEND_HOST_PORT`, `DB_HOST_PORT`), so you never edit
@@ -166,9 +166,13 @@ git clone <your-repo> nursery && cd nursery
 cp .env.prod.example .env.prod
 ```
 Edit `.env.prod` and change **every** secret:
-- `POSTGRES_PASSWORD` → strong password
+- `POSTGRES_PASSWORD` → strong password (the DB is reachable remotely — see below)
 - `SECRET_KEY` → `openssl rand -hex 32`
 - `ADMIN_EMAIL` / `ADMIN_PASSWORD` → your first admin login
+- **Startup behaviour** (this is the easy part):
+  - `RUN_MIGRATIONS_ON_STARTUP=true` → schema is created/upgraded automatically.
+  - `SEED_ON_STARTUP=true` → **also loads demo data + your admin**, so you can log in
+    immediately. Leave it `false` for a clean start (then do step 4).
 - (optional) `FRONTEND_HOST_PORT` / `DB_HOST_PORT` if 8080 / 15432 are taken
 
 ### 3. Build and start
@@ -177,20 +181,25 @@ docker compose -p nursery_prod -f docker-compose.prod.yml --env-file .env.prod u
 ```
 > Always include `-p nursery_prod` (its own project namespace).
 
-This starts the DB, backend (4 workers, migrations run once), and the app on
-**`127.0.0.1:8080`** — it will **not** touch the host's port 80 or 5432.
-
-### 4. Create the schema + first admin (no demo data)
+The backend runs `migrate` (and `seed` if `SEED_ON_STARTUP=true`) **once** before the 4
+workers start — never inside the workers, so there's no race / duplicate data. Open the
+firewall and browse straight away:
 ```bash
-docker compose -p nursery_prod -f docker-compose.prod.yml --env-file .env.prod \
-  run --rm init
+sudo ufw allow 8080/tcp        # the app
+# (only if you need remote DB access:)  sudo ufw allow 15432/tcp
 ```
-This one-shot `init` job runs the migrations and creates the admin from `.env.prod`.
+→ **`http://your-server-ip:8080`**
+
+### 4. First admin (only if `SEED_ON_STARTUP=false`)
+If you didn't seed, create the schema + your admin with the one-shot `init` job:
+```bash
+docker compose -p nursery_prod -f docker-compose.prod.yml --env-file .env.prod run --rm init
+```
 > Want demo data too? `... run --rm init python -m app.cli seed`
 
-### 5. Put it behind the host NGINX (your domain + HTTPS)
-The host NGINX (already on 80) just forwards your domain to the container on 8080. A
-ready-made config is at [`deploy/nginx-host.conf.example`](deploy/nginx-host.conf.example):
+### 5. (Optional) Custom domain + HTTPS via the host NGINX
+Browsing `:8080` works as-is. To serve a domain on 443, point the host NGINX at the
+container. A ready-made config is at [`deploy/nginx-host.conf.example`](deploy/nginx-host.conf.example):
 ```bash
 sudo cp deploy/nginx-host.conf.example /etc/nginx/sites-available/nursery
 sudo sed -i 's/yourdomain.com/your.real.domain/' /etc/nginx/sites-available/nursery
@@ -198,17 +207,16 @@ sudo ln -s /etc/nginx/sites-available/nursery /etc/nginx/sites-enabled/nursery
 sudo nginx -t && sudo systemctl reload nginx
 sudo certbot --nginx -d your.real.domain          # free HTTPS
 ```
-Now `https://your.real.domain` serves the app. (No host NGINX? Either set
-`FRONTEND_HOST_PORT=80` in `.env.prod`, or open the firewall to 8080 and visit
-`http://your-server-ip:8080`.)
 
-### Connecting pgAdmin in production
-The DB is bound to **loopback only** (`127.0.0.1:15432`) for security. Reach it with an
-SSH tunnel from your laptop:
-```bash
-ssh -L 15432:127.0.0.1:15432 user@your-server
-# then pgAdmin → host localhost, port 15432
-```
+### Connecting pgAdmin / a remote machine to Postgres
+The DB is published on **`${DB_HOST_PORT:-15432}` on all interfaces**, so from anywhere:
+- **Host:** your server IP   **Port:** `15432`   **DB:** `nursery_analytics`
+- **User / Password:** the `POSTGRES_USER` / `POSTGRES_PASSWORD` from `.env.prod`
+
+> ⚠️ **Security:** this exposes Postgres to the network. Use a strong password and a
+> firewall (`ufw allow from <your-ip> to any port 15432`). For the most secure setup,
+> bind it to localhost (edit the `db` `ports` to `127.0.0.1:15432:5432`) and reach it
+> via SSH tunnel: `ssh -L 15432:127.0.0.1:15432 user@server`.
 
 ### Production day-to-day
 ```bash
