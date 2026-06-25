@@ -14,26 +14,28 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
     p = scope.params
     sc = scope.site_clause()
 
-    # shifts last 60d
+    # shifts over the selected period
+    win = scope.window_days
+    win_lbl = f"last {win} days"
     shifts = await fetch_df(
         db,
         f"""SELECT s.staff_id, s.date, s.hours_scheduled, s.hours_worked, s.overtime_hours,
                    s.absent, s.room_id, st.hourly_rate, st.qualification_level, st.is_agency
             FROM fact_staff_shift s JOIN dim_staff st ON st.id = s.staff_id
-            WHERE 1=1 {scope.site_clause('s')} AND s.date >= :d60""",
-        {**p, "d60": today - dt.timedelta(days=60)},
+            WHERE 1=1 {scope.site_clause('s')} AND s.date >= :dwin""",
+        {**p, "dwin": today - dt.timedelta(days=win)},
     )
     last_shift_date = shifts["date"].max() if not shifts.empty else today
     on_duty = int(shifts[(shifts["date"] == last_shift_date) & (~shifts["absent"])]["staff_id"].nunique()) if not shifts.empty else 0
 
-    shifts30 = shifts[shifts["date"] >= (today - dt.timedelta(days=30))] if not shifts.empty else shifts
-    if not shifts30.empty:
-        absence_rate = pct(safe_div(int(shifts30["absent"].sum()), len(shifts30)) * 100)
-        overtime = round(float(shifts30["overtime_hours"].astype(float).sum()), 1)
-        worked = shifts30.loc[~shifts30["absent"]]
+    shiftsw = shifts  # already restricted to the active window
+    if not shiftsw.empty:
+        absence_rate = pct(safe_div(int(shiftsw["absent"].sum()), len(shiftsw)) * 100)
+        overtime = round(float(shiftsw["overtime_hours"].astype(float).sum()), 1)
+        worked = shiftsw.loc[~shiftsw["absent"]]
         payroll = round(float((worked["hours_worked"].astype(float) * worked["hourly_rate"].astype(float)).sum()), 2)
-        agency_hours = float(shifts30.loc[shifts30["is_agency"], "hours_worked"].astype(float).sum())
-        total_hours = float(shifts30["hours_worked"].astype(float).sum())
+        agency_hours = float(shiftsw.loc[shiftsw["is_agency"], "hours_worked"].astype(float).sum())
+        total_hours = float(shiftsw["hours_worked"].astype(float).sum())
         agency_pct = pct(safe_div(agency_hours, total_hours) * 100)
     else:
         absence_rate = overtime = payroll = agency_pct = 0
@@ -83,15 +85,15 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
         util["series"][1]["data"] = [round(float(v), 1) for v in wk["sched"]]
 
     return {
-        "staff.on_duty": kpi(on_duty, "On Duty Today"),
+        "staff.on_duty": kpi(on_duty, "On Duty Today", sub="as of today"),
         "staff.ratio": gauge(ratio_compliance, "Ratio Compliance"),
-        "staff.absence": kpi(absence_rate, "Absence Rate", unit="%", sub="last 30 days",
+        "staff.absence": kpi(absence_rate, "Absence Rate", unit="%", sub=win_lbl,
                              status="warn" if absence_rate > 8 else "ok"),
-        "staff.overtime": kpi(overtime, "Overtime Hours", sub="last 30 days"),
+        "staff.overtime": kpi(overtime, "Overtime Hours", sub=win_lbl),
         "staff.ratio_room": ratio_room,
         "staff.quals": quals_pie,
         "staff.utilisation": util,
-        "staff.payroll": kpi(payroll, "Payroll Cost", unit="£", sub="last 30 days"),
+        "staff.payroll": kpi(payroll, "Payroll Cost", unit="£", sub=win_lbl),
         "staff.agency": kpi(agency_pct, "Agency Usage", unit="%"),
         "_ratio_compliance": ratio_compliance, "_on_duty": on_duty,
     }

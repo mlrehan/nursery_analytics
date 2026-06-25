@@ -57,13 +57,17 @@ Each physical nursery: `name`, `borough`, `postcode`, `capacity` (licensed place
 
 ### `dim_room` — rooms within a site
 `site_id`, `name`, `room_type` (`baby` / `toddler` / `preschool`), `capacity`,
-`required_ratio` (EYFS adults-per-children: baby 3, toddler 4, preschool 8).
+`required_ratio` (how many children one staff member can look after: baby 3, toddler 4, preschool 8).
 **Why:** room-level occupancy and **staff-ratio compliance**.
 
 ### `dim_child` — children on roll (and waitlist/withdrawn)
 `site_id`, `room_id`, `parent_id`, names, `dob`, `gender`, `enrollment_date`,
 `status` (`active` / `waitlist` / `withdrawn`), `funding_type`
 (`private` / `funded_15` / `funded_30`), `monthly_fee`, `allergies`.
+**funding_type:** Who is paying for this child’s nursery cost — and how much government support they get
+private: No government funding, Parents pay full fee
+funded_15: 15 hours/week paid by the government, Parents pay remaining hours
+funded_30: 30 hours/week government funded childcare, Parents pay extra hours
 **Why:** the heart of occupancy, revenue-per-child, funding mix and EYFS.
 
 ### `dim_parent` — parents/guardians
@@ -115,6 +119,10 @@ payroll, utilisation, the live rota.
 **Powers:** compliance, audit-readiness, alerts.
 
 ### `fact_eyfs_observation` — development tracking
+### Every time a teacher observes a child (playing, talking, drawing, etc.), they record it here.
+### In EYFS (Early Years Foundation Stage), children are tracked in key areas:
+**EYFS areas**:   communication, physical, pse (personal, social, emotiona)
+                  literacy (reading & writing), numeracy (counting, math thinking) 
 `child_id`, `observation_date`, `area` (communication/physical/pse/literacy/numeracy),
 `status` (`emerging`/`expected`/`exceeding`), `on_track`.
 **Powers:** EYFS dashboard, at-risk children, the development heatmap.
@@ -133,7 +141,16 @@ payroll, utilisation, the live rota.
 ## D. How a number becomes a report
 
 Example — **Occupancy %**:
+`Occupancy = (Number of children enrolled ÷ Total licensed capacity) × 100`
 `COUNT(dim_child WHERE status='active')  ÷  SUM(dim_site.capacity)`.
+**
+      If a nursery has:
+
+      Licensed capacity: 60 children
+      Currently enrolled: 48 children
+
+      👉 Occupancy = (48 ÷ 60) × 100 = 80%
+**
 The backend computes these with pandas in `backend/app/analytics/<module>.py`, the
 API returns them, and the React frontend draws the chart. If your real data lands in
 these tables with the same columns, **every report works automatically** — see

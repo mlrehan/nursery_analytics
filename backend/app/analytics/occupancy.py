@@ -29,12 +29,14 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
     waitlist = int((children["status"] == "waitlist").sum()) if not children.empty else 0
     rate = pct(safe_div(filled, capacity) * 100)
 
-    # admissions / withdrawals (30d)
+    # admissions / withdrawals over the selected period
+    win = scope.window_days
+    win_lbl = f"last {win} days"
     ev = await fetch_df(
         db,
         f"""SELECT event_type, event_date FROM fact_enrollment_event
-            WHERE event_date >= :d30 {sc}""",
-        {**p, "d30": today - dt.timedelta(days=30)},
+            WHERE event_date >= :dwin {sc}""",
+        {**p, "dwin": today - dt.timedelta(days=win)},
     )
     adm = int((ev["event_type"] == "admission").sum()) if not ev.empty else 0
     wd = int((ev["event_type"] == "withdrawal").sum()) if not ev.empty else 0
@@ -62,10 +64,10 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
         counts = cats.value_counts()
         age_payload["series"][0]["data"] = [int(counts.get(lbl, 0)) for lbl in age_payload["categories"]]
 
-    # waitlist conversion funnel (last 90d)
+    # waitlist conversion funnel over the selected period
     ev90 = await fetch_df(
-        db, f"SELECT event_type FROM fact_enrollment_event WHERE event_date >= :d90 {sc}",
-        {**p, "d90": today - dt.timedelta(days=90)})
+        db, f"SELECT event_type FROM fact_enrollment_event WHERE event_date >= :dwin {sc}",
+        {**p, "dwin": today - dt.timedelta(days=win)})
     enquiry = int((ev90["event_type"] == "enquiry").sum()) if not ev90.empty else 0
     wl = int((ev90["event_type"] == "waitlist_join").sum()) if not ev90.empty else 0
     enrolled = int((ev90["event_type"] == "admission").sum()) if not ev90.empty else 0
@@ -104,11 +106,11 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
         funding_payload = {"data": [{"name": funding_labels.get(k, k), "value": int(v)} for k, v in fc.items()]}
 
     return {
-        "occ.capacity": kpi(filled, "Filled vs Capacity", sub=f"of {capacity} places"),
+        "occ.capacity": kpi(filled, "Filled vs Capacity", sub=f"of {capacity} places · as of today"),
         "occ.rate": gauge(rate, "Occupancy"),
         "occ.funding": funding_payload,
-        "occ.admissions": kpi(adm, "New Admissions", sub="last 30 days"),
-        "occ.withdrawals": kpi(wd, "Withdrawals", sub="last 30 days"),
+        "occ.admissions": kpi(adm, "New Admissions", sub=win_lbl),
+        "occ.withdrawals": kpi(wd, "Withdrawals", sub=win_lbl),
         "occ.by_room": by_room_payload,
         "occ.age_dist": age_payload,
         "occ.waitlist_conv": funnel,

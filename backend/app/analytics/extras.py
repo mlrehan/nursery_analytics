@@ -17,9 +17,10 @@ async def nutrition(db: AsyncSession, scope: Scope) -> dict:
     today = dt.date.today()
     p = scope.params
     sc = scope.site_clause()
+    win = scope.window_days
     meals = await fetch_df(
-        db, f"SELECT meal_type, intake_pct, allergy_flag, date FROM fact_meal WHERE date >= :d7 {sc}",
-        {**p, "d7": today - dt.timedelta(days=7)})
+        db, f"SELECT meal_type, intake_pct, allergy_flag, date FROM fact_meal WHERE date >= :dwin {sc}",
+        {**p, "dwin": today - dt.timedelta(days=win)})
     allergy = await fetch_df(
         db, f"SELECT COUNT(*) AS n FROM dim_child WHERE allergies IS NOT NULL AND status='active' {sc}", p)
     avg_intake = pct(meals["intake_pct"].astype(float).mean()) if not meals.empty else 0
@@ -32,7 +33,7 @@ async def nutrition(db: AsyncSession, scope: Scope) -> dict:
     return {
         "nut.intake": gauge(avg_intake, "Avg Meal Intake"),
         "nut.allergy": kpi(int(allergy["n"].iloc[0]) if not allergy.empty else 0, "Allergy Alerts", status="warn"),
-        "nut.meals_logged": kpi(int(len(meals)), "Meals Logged", sub="last 7 days"),
+        "nut.meals_logged": kpi(int(len(meals)), "Meals Logged", sub=f"last {win} days"),
         "nut.by_meal": by_meal,
     }
 
@@ -42,9 +43,10 @@ async def parent_comms(db: AsyncSession, scope: Scope) -> dict:
     today = dt.date.today()
     p = scope.params
     sc = scope.site_clause()
+    win = scope.window_days
     msg = await fetch_df(
         db, f"SELECT sent_at, direction, message_type, is_read, response_minutes FROM fact_message "
-            f"WHERE sent_at >= :d30 {sc}", {**p, "d30": today - dt.timedelta(days=30)})
+            f"WHERE sent_at >= :dwin {sc}", {**p, "dwin": today - dt.timedelta(days=win)})
     if msg.empty:
         return {"pc.messages": kpi(0, "Messages"), "pc.response": kpi(0, "Avg Response", unit="min"),
                 "pc.read_rate": gauge(0, "Read Rate"), "pc.reports": kpi(0, "Daily Reports"),
@@ -59,10 +61,10 @@ async def parent_comms(db: AsyncSession, scope: Scope) -> dict:
            "series": [{"name": "Inbound", "data": [int(v) for v in pivot.get("inbound", pd.Series([0]*len(pivot)))]},
                       {"name": "Outbound", "data": [int(v) for v in pivot.get("outbound", pd.Series([0]*len(pivot)))]}]}
     return {
-        "pc.messages": kpi(int(len(msg)), "Messages", sub="last 30 days"),
+        "pc.messages": kpi(int(len(msg)), "Messages", sub=f"last {win} days"),
         "pc.response": kpi(avg_resp, "Avg Response", unit="min", status="ok" if avg_resp < 60 else "warn"),
         "pc.read_rate": gauge(read_rate, "Read Rate"),
-        "pc.reports": kpi(reports, "Daily Reports Sent", sub="last 30 days"),
+        "pc.reports": kpi(reports, "Daily Reports Sent", sub=f"last {win} days"),
         "pc.volume_trend": vol,
     }
 

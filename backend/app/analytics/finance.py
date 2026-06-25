@@ -33,21 +33,20 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
     inv["amount"] = inv["amount"].astype(float)
     inv["period_month"] = pd.to_datetime(inv["period_month"]).dt.date
 
+    win = scope.window_days
+    win_lbl = f"last {win} days"
     billed_mtd = float(inv.loc[inv["period_month"] == month_start, "amount"].sum())
 
+    # collected + payment success over the selected period
     pay = await fetch_df(
         db,
         f"""SELECT amount, success, payment_date, is_refund FROM fact_payment
-            WHERE 1=1 {sc} AND payment_date >= :ms""",
-        {**p, "ms": month_start},
+            WHERE 1=1 {sc} AND payment_date >= :dwin""",
+        {**p, "dwin": today - dt.timedelta(days=win)},
     )
-    collected_mtd = float(pay.loc[pay["success"] & ~pay["is_refund"], "amount"].astype(float).sum()) if not pay.empty else 0.0
-
-    # payment success rate (90d)
-    pay90 = await fetch_df(
-        db, f"SELECT success FROM fact_payment WHERE 1=1 {sc} AND payment_date >= :d90 AND is_refund = FALSE",
-        {**p, "d90": today - dt.timedelta(days=90)})
-    success_rate = pct(safe_div(int(pay90["success"].sum()), len(pay90)) * 100) if not pay90.empty else 100.0
+    collected = float(pay.loc[pay["success"] & ~pay["is_refund"], "amount"].astype(float).sum()) if not pay.empty else 0.0
+    paid_attempts = pay.loc[~pay["is_refund"]] if not pay.empty else pay
+    success_rate = pct(safe_div(int(paid_attempts["success"].sum()), len(paid_attempts)) * 100) if not paid_attempts.empty else 100.0
 
     outstanding = inv[inv["status"].isin(["unpaid", "overdue", "partial"])]
     arrears = float(outstanding["amount"].sum())
@@ -111,9 +110,10 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
     late_table = {"columns": ["Child", "Amount", "Overdue", "Status"], "rows": rows}
 
     return {
-        "fin.billed": kpi(round(billed_mtd, 2), "Billed This Month", unit="£"),
-        "fin.collected": kpi(round(collected_mtd, 2), "Collected This Month", unit="£"),
-        "fin.arrears": kpi(round(arrears, 2), "Outstanding Debt", unit="£", status="warn" if arrears > 0 else "ok"),
+        "fin.billed": kpi(round(billed_mtd, 2), "Billed This Month", unit="£", sub="this calendar month"),
+        "fin.collected": kpi(round(collected, 2), "Collected", unit="£", sub=win_lbl),
+        "fin.arrears": kpi(round(arrears, 2), "Outstanding Debt", unit="£", sub="as of today",
+                           status="warn" if arrears > 0 else "ok"),
         "fin.success_rate": gauge(success_rate, "Payment Success"),
         "fin.paid_unpaid": pie,
         "fin.aged": aged,

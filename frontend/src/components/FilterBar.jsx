@@ -1,7 +1,9 @@
 import { useFilters } from '../context/FilterContext'
 
-/** Global dashboard toolbar: site picker + period segmented control + active chips. */
-export default function FilterBar() {
+/** Global dashboard toolbar: site picker + period segmented control + active chips.
+ *  `showPeriod` is false on snapshot dashboards (Executive etc.) where a lookback
+ *  period has no effect — we show an "as of today" note instead of a dead control. */
+export default function FilterBar({ showPeriod = true }) {
   const { sites, canPickSite, periods, siteId, days, setSiteId, setDays, siteName } = useFilters()
 
   return (
@@ -20,13 +22,19 @@ export default function FilterBar() {
         </div>
       )}
 
-      <div className="seg" role="tablist">
-        {periods.map((p) => (
-          <button key={p.value} data-active={days === p.value} onClick={() => setDays(p.value)}>
-            {p.label}
-          </button>
-        ))}
-      </div>
+      {showPeriod ? (
+        <div className="seg" role="tablist" title="Applies to activity-over-time reports">
+          {periods.map((p) => (
+            <button key={p.value} data-active={days === p.value} onClick={() => setDays(p.value)}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <span className="chip" title="This dashboard is a live snapshot; a lookback period doesn't apply">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Live snapshot · as of today
+        </span>
+      )}
 
       {siteId && (
         <button onClick={() => setSiteId(null)} className="chip hover:opacity-80" title="Clear site filter">

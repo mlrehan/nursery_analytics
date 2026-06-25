@@ -9,6 +9,9 @@ import { useFilters } from '../context/FilterContext'
 const SPAN = { 3: 'md:col-span-3', 4: 'md:col-span-4', 6: 'md:col-span-6', 8: 'md:col-span-8', 12: 'md:col-span-12' }
 // widgets whose x-axis categories are site names → clicking cross-filters by site
 const SITE_CLICK_WIDGETS = new Set(['exec.site_breakdown', 'ms.occupancy', 'ms.revenue'])
+// dashboards where the lookback period actually changes numbers (have activity-over-time
+// reports). Others are live snapshots, so the period control is hidden there.
+const PERIOD_AWARE = new Set(['attendance', 'eyfs', 'occupancy', 'staff', 'finance', 'parent_comms', 'nutrition', 'analytics'])
 
 export default function Dashboard() {
   const { moduleKey } = useParams()
@@ -63,7 +66,7 @@ export default function Dashboard() {
       </div>
 
       <div className="surface px-4 py-3 mb-5 flex items-center gap-3 sticky top-[4.5rem] z-[5]">
-        <FilterBar />
+        <FilterBar showPeriod={PERIOD_AWARE.has(moduleKey)} />
       </div>
 
       {error && <div className="surface p-4 text-red-500 text-sm mb-4">{error}</div>}
