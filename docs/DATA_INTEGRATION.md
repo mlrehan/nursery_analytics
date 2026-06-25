@@ -27,10 +27,10 @@ SEED_ON_STARTUP=false
 To clear the demo data and start clean:
 
 ```bash
-docker compose exec backend python -m app.integration.import_csv /nonexistent --truncate
-# (the --truncate empties all dim_/fact_ tables; ignore the "folder not found" after)
+docker compose exec backend python -m app.integration.import_csv --truncate
 ```
-…or simply `docker compose down -v` before your first real load.
+…or simply `docker compose down -v` before your first real load (this also wipes
+the database volume).
 
 ---
 
@@ -70,13 +70,20 @@ files link together (a child’s `site_id` must equal a real `dim_site.id` you s
 
 ### 2. Run the importer
 
+The backend container can only see files inside the `backend/` folder (it's the part
+mounted into the container), so put your folder there:
+
 ```bash
-# put my_data/ inside the project, then:
-docker compose exec backend python -m app.integration.import_csv /app/../my_data
-# (local, no Docker:)  python -m app.integration.import_csv ./my_data
+# 1) place your folder at:  backend/my_data/   (sites.csv, children.csv, …)
+# 2) run it (Docker):
+docker compose exec backend python -m app.integration.import_csv my_data
+
+# Local, without Docker (from the backend/ folder):
+python -m app.integration.import_csv ./my_data
 ```
-Add `--truncate` to wipe existing data first. The importer loads in the correct order,
-ignores unknown columns, and reports how many rows each file loaded.
+Add `--truncate` to wipe existing data first, e.g.
+`... import_csv my_data --truncate`. The importer loads in the correct (foreign-key
+safe) order, ignores unknown columns, and reports how many rows each file loaded.
 
 ### 3. Check it
 Log in → the dashboards now reflect your data. If a number looks off, see “Validating”.
@@ -151,12 +158,12 @@ table from [DATABASE.md](DATABASE.md).
 ## Validating your load
 
 ```bash
-# counts per table
-docker compose exec db psql -U "$POSTGRES_USER" -d nursery_analytics -c "
-  SELECT 'children' t, count(*) FROM dim_child
-  UNION ALL SELECT 'active', count(*) FROM dim_child WHERE status='active'
-  UNION ALL SELECT 'invoices', count(*) FROM fact_invoice
-  UNION ALL SELECT 'attendance', count(*) FROM fact_attendance;"
+# counts per table (runs inside the db container, using its own credentials)
+docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
+  SELECT '\''children'\'' t, count(*) FROM dim_child
+  UNION ALL SELECT '\''active'\'', count(*) FROM dim_child WHERE status='\''active'\''
+  UNION ALL SELECT '\''invoices'\'', count(*) FROM fact_invoice
+  UNION ALL SELECT '\''attendance'\'', count(*) FROM fact_attendance;"'
 ```
 Then open the **Executive** dashboard: *Enrolled vs Capacity* should match your roll,
 and *Occupancy* should look right. Use the **site filter** to sanity-check each branch.

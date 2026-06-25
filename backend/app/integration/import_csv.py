@@ -73,30 +73,36 @@ def _load_file(conn: psycopg.Connection, path: pathlib.Path, table: str) -> int:
     return len(rows)
 
 
-def run(folder: str, truncate: bool = False) -> None:
-    base = pathlib.Path(folder)
-    if not base.is_dir():
-        raise SystemExit(f"folder not found: {folder}")
+def run(folder: str | None = None, truncate: bool = False) -> None:
+    base = pathlib.Path(folder) if folder else None
+    if folder and not (base and base.is_dir()):
+        # not fatal when we're only truncating
+        print(f"[import] note: folder '{folder}' not found — nothing to load")
+        base = None
     with psycopg.connect(_dsn()) as conn:
         if truncate:
             print("[import] truncating existing dim_/fact_ tables …")
             conn.execute("TRUNCATE " + ", ".join(TRUNCATE_ORDER) + " RESTART IDENTITY CASCADE")
             conn.commit()
         total = 0
-        for fname, table in FILES:
-            path = base / fname
-            if not path.exists():
-                continue
-            n = _load_file(conn, path, table)
-            conn.commit()
-            total += n
-            print(f"[import] {fname:24} -> {table:24} {n:>7} rows")
+        if base:
+            for fname, table in FILES:
+                path = base / fname
+                if not path.exists():
+                    continue
+                n = _load_file(conn, path, table)
+                conn.commit()
+                total += n
+                print(f"[import] {fname:24} -> {table:24} {n:>7} rows")
         print(f"[import] done — {total} rows loaded")
 
 
 if __name__ == "__main__":
     args = sys.argv[1:]
-    if not args:
+    truncate = "--truncate" in args
+    folders = [a for a in args if not a.startswith("--")]
+    if not folders and not truncate:
         print("usage: python -m app.integration.import_csv <folder> [--truncate]")
+        print("       python -m app.integration.import_csv --truncate   # wipe data only")
         raise SystemExit(1)
-    run(args[0], truncate="--truncate" in args)
+    run(folders[0] if folders else None, truncate=truncate)

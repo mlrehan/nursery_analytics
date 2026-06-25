@@ -24,11 +24,18 @@ written for nursery owners, managers and staff — no technical knowledge needed
 - **Heatmap** — a grid where colour = intensity (e.g. attendance by day & room).
 - **Funnel** — a drop-off process (e.g. enquiry → waitlist → enrolled).
 
-## Filters (top of every dashboard)
+## Filters (top of each dashboard)
 
 - **Site** — view all sites combined, or focus on one nursery. (Single-site staff
   are automatically limited to their own site.)
-- **Period** — 7 days / 30 days / 90 days / 12 months. Affects time-based reports.
+- **Period** — 7 days / 30 days / 90 days / 12 months. It only appears on dashboards
+  with *activity-over-time* reports (Occupancy, Finance, Staff, Attendance, EYFS,
+  Parent Comms, Nutrition, Analytics) and changes those numbers (e.g. new admissions,
+  absences, payments collected).
+- **Live snapshot** — "as of today" dashboards (Executive, Multi-Site, Operations,
+  Mobile) show a *Live snapshot · as of today* badge instead of a period control,
+  because a lookback window doesn't apply to current-state numbers like *children on
+  roll* or *outstanding arrears* (just as a bank balance isn't a date range).
 - **Click-to-filter** — clicking a site in a chart filters the whole dashboard to it.
 
 ---
