@@ -81,7 +81,10 @@ services:
 
     restart: "no"
 
-    command: python -m app.cli seed
+    command: >
+      sh -c "python -m app.cli migrate &&
+            python -m app.cli seed &&
+            python -m app.cli bootstrap-admin"
 
 
 volumes:
