@@ -1,91 +1,92 @@
+# Production stack — designed to COEXIST with software already on the host.
+#
+#   * Host PostgreSQL on 5432  -> fine. Our DB is published on 127.0.0.1:${DB_HOST_PORT:-15432}
+#                                 (loopback only; reach it via SSH tunnel / pgAdmin on the box).
+#   * Host NGINX/Apache on 80  -> fine. Our app is published on ${FRONTEND_HOST_PORT:-8080}
+#                                 (NOT 80). Point the host web server at http://127.0.0.1:8080.
+#   * Backend is internal-only (never published).
+#
+# All host ports are env-driven, so you can change them without editing this file.
+#
+# First run:
+#   cp .env.prod.example .env.prod          # then edit secrets + ports
+#   docker compose -p nursery_prod -f docker-compose.prod.yml --env-file .env.prod up -d --build
+#   docker compose -p nursery_prod -f docker-compose.prod.yml --env-file .env.prod \
+#       run --rm init                       # create DB schema + first admin
 services:
-
   db:
     image: postgres:16-alpine
     container_name: nursery_db_prod
     restart: always
-
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-
+    # Loopback-only publish so a host Postgres on 5432 is untouched and ours is
+    # never exposed to the internet. Remove this whole block to keep it fully internal.
     ports:
-      - "15432:5432"   # NON-default external port
-
+      - "127.0.0.1:${DB_HOST_PORT:-15432}:5432"
     volumes:
       - pgdata_prod:/var/lib/postgresql/data
-
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
 
-
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-
     container_name: nursery_backend_prod
     restart: always
-
     env_file: .env.prod
-
     environment:
       POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
       RUN_MIGRATIONS_ON_STARTUP: "false"
       SEED_ON_STARTUP: "false"
-
     depends_on:
       db:
         condition: service_healthy
-
     expose:
       - "8000"
-
+    # migrations run once (before workers fork); NO demo seed in production
     command: >
       sh -c "python -m app.cli migrate &&
-             python -m app.cli seed &&
              uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4 --proxy-headers"
-
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
-
     container_name: nursery_frontend_prod
     restart: always
-
     depends_on:
       - backend
-
+    # Published on a high port (not 80) so the host's NGINX keeps owning 80/443.
+    # Point the host NGINX at http://127.0.0.1:${FRONTEND_HOST_PORT}.  (See DEPLOYMENT.md.)
     ports:
-      - "8085:80"   # NON-default frontend port
+      - "${FRONTEND_HOST_PORT:-8080}:80"
 
-
-  # Optional but recommended: isolated seed job (manual run if needed)
-  seed:
+  # One-shot setup job. Opt-in via the "init" profile, so a normal `up` never runs it.
+  #   migrate -> create/upgrade schema
+  #   bootstrap-admin -> create the first admin from .env.prod (no demo data)
+  # Want demo data too? Use:  ... run --rm init python -m app.cli seed
+  init:
     build:
       context: ./backend
-
-    container_name: nursery_seed_job
-
+    profiles: ["init"]
     env_file: .env.prod
-
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
     depends_on:
       db:
         condition: service_healthy
-
     restart: "no"
-
     command: >
-      sh -c "python -m app.cli migrate &&
-            python -m app.cli seed &&
-            python -m app.cli bootstrap-admin"
-
+      sh -c "python -m app.cli migrate && python -m app.cli bootstrap-admin"
 
 volumes:
   pgdata_prod:

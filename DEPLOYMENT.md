@@ -144,54 +144,71 @@ npm run dev                            # → http://localhost:5173
 
 ---
 
-## 🚀 Production deployment (any server: Linux, macOS or Windows)
+## 🚀 Production deployment (Ubuntu/Linux that may already run NGINX + PostgreSQL)
 
-Same Docker idea, but with compiled assets, no demo data, and the database hidden from
-the internet. A small Linux VM (1–2 vCPU, 2 GB RAM) is plenty.
+This stack is built to **coexist** with software already on the server:
+
+| Already on host | Our stack | Conflict? |
+|---|---|---|
+| **PostgreSQL** on 5432 | our DB on `127.0.0.1:15432` (loopback only) | **No** |
+| **NGINX/Apache** on 80/443 | our app on `127.0.0.1:8080` (the host NGINX proxies to it) | **No** |
+| — | backend is internal-only (never published) | — |
+
+All host ports are env-driven (`FRONTEND_HOST_PORT`, `DB_HOST_PORT`), so you never edit
+the compose file to avoid a clash.
 
 ### 1. Install Docker
-Same as Step 1 above (on a Linux server: `curl -fsSL https://get.docker.com | sh`).
+On the server: `curl -fsSL https://get.docker.com | sh` then `sudo usermod -aG docker $USER` (log out/in).
 
 ### 2. Get the code and set real secrets
 ```bash
-git clone <your-repo> nursery
-cd nursery
-cp .env.prod.example .env.prod          # (Windows cmd: copy .env.prod.example .env.prod)
+git clone <your-repo> nursery && cd nursery
+cp .env.prod.example .env.prod
 ```
-Open `.env.prod` and change **every** secret:
-- `POSTGRES_PASSWORD` → a strong password
-- `SECRET_KEY` → run `openssl rand -hex 32` and paste the result
+Edit `.env.prod` and change **every** secret:
+- `POSTGRES_PASSWORD` → strong password
+- `SECRET_KEY` → `openssl rand -hex 32`
 - `ADMIN_EMAIL` / `ADMIN_PASSWORD` → your first admin login
+- (optional) `FRONTEND_HOST_PORT` / `DB_HOST_PORT` if 8080 / 15432 are taken
 
 ### 3. Build and start
 ```bash
 docker compose -p nursery_prod -f docker-compose.prod.yml --env-file .env.prod up -d --build
 ```
-> Always include `-p nursery_prod`. It keeps the production stack separate from any dev
-> stack on the same machine (otherwise they share names and overwrite each other).
+> Always include `-p nursery_prod` (its own project namespace).
 
-This serves the app on **port 80**, runs migrations once, starts 4 backend workers, and
-keeps the database internal (not reachable from outside).
+This starts the DB, backend (4 workers, migrations run once), and the app on
+**`127.0.0.1:8080`** — it will **not** touch the host's port 80 or 5432.
 
-### 4. Create your first admin (no demo data)
+### 4. Create the schema + first admin (no demo data)
 ```bash
 docker compose -p nursery_prod -f docker-compose.prod.yml --env-file .env.prod \
-  exec backend python -m app.cli bootstrap-admin
+  run --rm init
 ```
-Open `http://your-server-ip/`, sign in with the admin from `.env.prod`, then add other
-users in **User Management**. Load your real data via [docs/DATA_INTEGRATION.md](docs/DATA_INTEGRATION.md).
+This one-shot `init` job runs the migrations and creates the admin from `.env.prod`.
+> Want demo data too? `... run --rm init python -m app.cli seed`
 
-> Prefer to start with demo data instead? Run `... exec backend python -m app.cli seed`.
+### 5. Put it behind the host NGINX (your domain + HTTPS)
+The host NGINX (already on 80) just forwards your domain to the container on 8080. A
+ready-made config is at [`deploy/nginx-host.conf.example`](deploy/nginx-host.conf.example):
+```bash
+sudo cp deploy/nginx-host.conf.example /etc/nginx/sites-available/nursery
+sudo sed -i 's/yourdomain.com/your.real.domain/' /etc/nginx/sites-available/nursery
+sudo ln -s /etc/nginx/sites-available/nursery /etc/nginx/sites-enabled/nursery
+sudo nginx -t && sudo systemctl reload nginx
+sudo certbot --nginx -d your.real.domain          # free HTTPS
+```
+Now `https://your.real.domain` serves the app. (No host NGINX? Either set
+`FRONTEND_HOST_PORT=80` in `.env.prod`, or open the firewall to 8080 and visit
+`http://your-server-ip:8080`.)
 
-### 5. Add HTTPS + your domain (recommended)
-Point a TLS reverse proxy at port 80. The easiest is **Caddy** (auto free certificates):
+### Connecting pgAdmin in production
+The DB is bound to **loopback only** (`127.0.0.1:15432`) for security. Reach it with an
+SSH tunnel from your laptop:
+```bash
+ssh -L 15432:127.0.0.1:15432 user@your-server
+# then pgAdmin → host localhost, port 15432
 ```
-# /etc/caddy/Caddyfile
-yourdomain.com {
-    reverse_proxy localhost:80
-}
-```
-(Nginx + certbot, or a cloud load balancer, work too.)
 
 ### Production day-to-day
 ```bash
@@ -235,8 +252,10 @@ never run twice. **Never edit a file that has already run — always add a new o
 | `pip install` hangs at `Preparing metadata (pyproject.toml)` | You're on Python 3.13/3.14. Use **Python 3.12**. (Or just use Docker.) |
 | pgAdmin can't connect, or "port 5432 in use" | The Docker database is on **localhost:5498**, not 5432. |
 | `password authentication failed` after changing DB user/password in `.env` | Postgres only applies those on first creation. Run `docker compose down -v && docker compose up -d` to re-initialise. |
-| `port is already allocated` | Something else uses 5173 / 8000 / 80. Stop it, or change the published port in the compose file. |
+| **Prod:** `failed to bind host port 0.0.0.0:80: address already in use` | The host NGINX owns 80 — that's expected. The app now publishes on **8080**, not 80. Pull latest, or set `FRONTEND_HOST_PORT` in `.env.prod`, then `up -d`. Put the host NGINX in front (Step 5). |
+| **Prod:** port 5432 / 15432 already in use | Change `DB_HOST_PORT` in `.env.prod` (the container DB never uses the host's 5432). |
+| `port is already allocated` (dev) | Something uses 5173 / 8000. Stop it, or change the published port. |
 | `502 Bad Gateway` right after starting production | Backend workers are still booting — wait ~10 seconds and refresh. |
-| Can't log in on production | You haven't created the admin yet — run the `bootstrap-admin` step. |
+| Can't log in on production | Run the one-shot `... run --rm init` job to create the schema + admin. |
 | Dev containers got "replaced" by production | Always use `-p nursery_prod` for the production commands. |
 | `error reading bcrypt version` in logs | Harmless message from a library; logins still work. |
