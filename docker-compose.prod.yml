@@ -1,60 +1,88 @@
-# Production stack. Differences vs the dev docker-compose.yml:
-#   - no source bind-mounts, no hot-reload
-#   - frontend is a compiled nginx image (Dockerfile.prod) on port 80
-#   - backend runs multiple uvicorn workers; migrations run once at start, no auto-seed
-#   - the database port is NOT published to the host
-#
-# Usage:
-#   cp .env.prod.example .env.prod   # then edit secrets
-#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 services:
+
   db:
     image: postgres:16-alpine
     container_name: nursery_db_prod
     restart: always
+
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+
+    ports:
+      - "15432:5432"   # NON-default external port
+
     volumes:
       - pgdata_prod:/var/lib/postgresql/data
+
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
 
+
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
+
     container_name: nursery_backend_prod
     restart: always
+
     env_file: .env.prod
+
     environment:
       POSTGRES_HOST: db
       RUN_MIGRATIONS_ON_STARTUP: "false"
       SEED_ON_STARTUP: "false"
+
     depends_on:
       db:
         condition: service_healthy
+
     expose:
       - "8000"
-    # migrations run ONCE here (before workers fork), then serve with 4 workers
+
     command: >
       sh -c "python -m app.cli migrate &&
+             python -m app.cli seed &&
              uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4 --proxy-headers"
+
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
+
     container_name: nursery_frontend_prod
     restart: always
+
     depends_on:
       - backend
+
     ports:
-      - "80:80"
+      - "8085:80"   # NON-default frontend port
+
+
+  # Optional but recommended: isolated seed job (manual run if needed)
+  seed:
+    build:
+      context: ./backend
+
+    container_name: nursery_seed_job
+
+    env_file: .env.prod
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    restart: "no"
+
+    command: python -m app.cli seed
+
 
 volumes:
   pgdata_prod:
