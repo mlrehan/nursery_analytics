@@ -6,10 +6,12 @@ returns the computed analytics payload for one module, scoped by role.
 """
 from __future__ import annotations
 
+import io
 import time
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,7 +21,12 @@ from app.core.database import get_db
 from app.core.deps import get_current_user, get_user_permissions
 from app.models.auth import DashboardModule, DashboardWidget, RoleWidgetAccess, User
 from app.models.dimensions import Site
+from app.models.settings import AppSettings
+from app.reports.pdf import build_report
 from app.schemas.auth import MeDashboard, ModuleWithWidgets, RoleOut, UserOut, WidgetOut
+
+PERIOD_LABEL = {7: "Last 7 days", 30: "Last 30 days", 90: "Last 90 days",
+                180: "Last 6 months", 365: "Last 12 months"}
 
 router = APIRouter(prefix="/dashboards", tags=["dashboards"])
 
@@ -124,3 +131,50 @@ async def module_data(
                   "all_sites": scope.all_sites, "window_days": scope.window_days},
         "data": data,
     }
+
+
+@router.get("/{module_key}/report.pdf")
+async def module_report_pdf(
+    module_key: str,
+    site_id: int | None = Query(None),
+    days: int | None = Query(None),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> StreamingResponse:
+    """Branded, server-generated PDF of one dashboard — same data as the screen."""
+    perms = await get_user_permissions(user, db)
+    if f"view.{module_key}" not in perms:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not permitted for this module")
+    scope = scope_for(user, site_id=site_id, days=days)
+
+    module = await db.scalar(select(DashboardModule).where(DashboardModule.key == module_key))
+    if module is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Module not found")
+
+    rows = (
+        await db.execute(
+            select(DashboardWidget)
+            .join(RoleWidgetAccess, (RoleWidgetAccess.widget_id == DashboardWidget.id)
+                  & (RoleWidgetAccess.role_id == user.role_id))
+            .where(DashboardWidget.module_id == module.id, RoleWidgetAccess.is_enabled.is_(True))
+            .order_by(RoleWidgetAccess.position, DashboardWidget.sort_order)
+        )
+    ).scalars().all()
+    widgets = [{"key": w.key, "title": w.title, "viz": w.viz_type} for w in rows]
+
+    data = await compute_module(module_key, db, scope)
+
+    branding = await db.get(AppSettings, 1)
+    brand_name = (branding.brand_name if branding else None) or "Nursery Analytics"
+
+    site_label = "All sites"
+    if scope.site_id:
+        s = await db.get(Site, scope.site_id)
+        site_label = s.name if s else f"Site {scope.site_id}"
+    scope_label = f"{site_label}  ·  {PERIOD_LABEL.get(scope.window_days, f'Last {scope.window_days} days')}"
+
+    pdf = build_report(brand_name=brand_name, scope_label=scope_label,
+                       module_name=module.name, widgets=widgets, data=data)
+    fname = f"{brand_name.replace(' ', '_')}_{module_key}_{datetime.now():%Y%m%d}.pdf"
+    return StreamingResponse(io.BytesIO(pdf), media_type="application/pdf",
+                             headers={"Content-Disposition": f'attachment; filename="{fname}"'})

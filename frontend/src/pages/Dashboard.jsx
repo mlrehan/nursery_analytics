@@ -79,7 +79,7 @@ export default function Dashboard() {
           {meta?.cached && <span className="chip">cached</span>}
           {meta && <span className="hidden sm:inline">Updated {new Date(meta.generated_at).toLocaleTimeString()}</span>}
           <button onClick={load} className="btn-ghost border hairline !px-2.5" title="Refresh">↻</button>
-          <ExportShare title={module.name} />
+          <ExportShare title={module.name} moduleKey={moduleKey} />
         </div>
       </div>
 
