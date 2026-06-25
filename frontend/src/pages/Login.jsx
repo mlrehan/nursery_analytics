@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useBranding } from '../context/BrandingContext'
 
 const DEMO = [
   ['Administrator', 'admin@lait.org.uk', 'Admin123!'],
@@ -12,6 +13,7 @@ const DEMO = [
 
 export default function Login() {
   const { login } = useAuth()
+  const { brand_name, brand_tagline, logo_url, letter } = useBranding()
   const navigate = useNavigate()
   const [email, setEmail] = useState('admin@lait.org.uk')
   const [password, setPassword] = useState('Admin123!')
@@ -32,25 +34,48 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-2">
+    <div className="min-h-screen grid lg:grid-cols-2 bg-[var(--page)]">
       {/* Brand panel */}
-      <div className="hidden lg:flex flex-col justify-between p-12 bg-gradient-to-br from-brand-700 via-brand-600 to-brand-900 text-white">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-white/15 grid place-items-center font-extrabold text-xl">N</div>
-          <span className="font-bold text-lg">Nursery Analytics</span>
+      <div className="relative hidden lg:flex flex-col justify-between p-12 text-white overflow-hidden"
+        style={{ backgroundImage: 'linear-gradient(135deg,#1e1b4b 0%,#3730a3 45%,#6d28d9 100%)' }}>
+        {/* signature aurora mesh + faint grid */}
+        <div className="absolute inset-0 opacity-70" style={{
+          backgroundImage:
+            'radial-gradient(600px 360px at 80% 10%, rgba(124,92,246,.55), transparent 60%),' +
+            'radial-gradient(560px 360px at 10% 90%, rgba(37,99,235,.45), transparent 55%)' }} />
+        <div className="absolute inset-0 opacity-[0.06]" style={{
+          backgroundImage: 'linear-gradient(#fff 1px,transparent 1px),linear-gradient(90deg,#fff 1px,transparent 1px)',
+          backgroundSize: '40px 40px' }} />
+        <div className="relative flex items-center gap-3">
+          <div className="w-11 h-11 rounded-2xl grid place-items-center font-extrabold text-xl font-display overflow-hidden bg-white/15 backdrop-blur">
+            {logo_url ? <img src={logo_url} alt="" className="w-full h-full object-contain" /> : letter}
+          </div>
+          <span className="font-bold text-lg font-display">{brand_name}</span>
         </div>
-        <div>
-          <h1 className="text-4xl font-extrabold leading-tight">Stripe-level analytics<br />for UK nursery chains.</h1>
-          <p className="mt-4 text-white/80 max-w-md">Occupancy, revenue, attendance, EYFS progress, staffing and compliance — every decision layer in one place.</p>
+        <div className="relative">
+          <div className="eyebrow text-white/70 mb-3">{brand_tagline || 'Early Years Intelligence'}</div>
+          <h1 className="text-[40px] leading-[1.05] font-bold font-display">Every decision layer<br />of your nursery,<br />in one command centre.</h1>
+          <p className="mt-5 text-white/75 max-w-md">Occupancy, revenue, attendance, EYFS progress, staffing and compliance — live, filterable, and inspection-ready.</p>
+          <div className="mt-8 flex gap-6 text-sm text-white/80">
+            <div><div className="text-2xl font-bold font-display nums">15</div>dashboards</div>
+            <div><div className="text-2xl font-bold font-display nums">5</div>roles</div>
+            <div><div className="text-2xl font-bold font-display nums">EYFS</div>aligned</div>
+          </div>
         </div>
-        <p className="text-white/60 text-sm">© LAIT · London</p>
+        <p className="relative text-white/55 text-sm">© {new Date().getFullYear()} {brand_name}</p>
       </div>
 
       {/* Form */}
-      <div className="flex items-center justify-center p-6 bg-slate-50 dark:bg-slate-950">
+      <div className="flex items-center justify-center p-6">
         <div className="w-full max-w-sm">
-          <h2 className="text-2xl font-extrabold">Sign in</h2>
-          <p className="muted text-sm mt-1 mb-6">Use a demo account or your credentials.</p>
+          <div className="lg:hidden flex items-center gap-2.5 mb-8">
+            <div className="w-10 h-10 rounded-xl grid place-items-center text-white font-extrabold font-display overflow-hidden brandmark">
+              {logo_url ? <img src={logo_url} alt="" className="w-full h-full object-contain" /> : letter}
+            </div>
+            <span className="font-bold text-lg font-display">{brand_name}</span>
+          </div>
+          <h2 className="text-2xl font-bold font-display">Welcome back</h2>
+          <p className="muted text-sm mt-1 mb-6">Sign in to your {brand_name} workspace.</p>
           <form onSubmit={submit} className="space-y-4">
             <div>
               <label className="text-sm font-medium">Email</label>
@@ -60,18 +85,18 @@ export default function Login() {
               <label className="text-sm font-medium">Password</label>
               <input className="input mt-1" value={password} onChange={(e) => setPassword(e.target.value)} type="password" required />
             </div>
-            {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+            {error && <p className="text-sm text-red-500">{error}</p>}
             <button className="btn-primary w-full" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
           </form>
 
           <div className="mt-8">
-            <p className="text-xs uppercase tracking-wider muted mb-2">Demo accounts</p>
+            <p className="eyebrow mb-2">Demo accounts</p>
             <div className="grid grid-cols-1 gap-1.5">
               {DEMO.map(([label, e, p]) => (
                 <button key={e} onClick={() => { setEmail(e); setPassword(p) }}
-                  className="surface px-3 py-2 text-left text-sm hover:border-brand-400 transition flex justify-between">
+                  className="surface px-3 py-2 text-left text-sm hover:-translate-y-0.5 hover:shadow-md transition flex justify-between items-center">
                   <span className="font-medium">{label}</span>
-                  <span className="muted">{e}</span>
+                  <span className="muted text-xs">{e}</span>
                 </button>
               ))}
             </div>

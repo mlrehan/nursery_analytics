@@ -95,6 +95,22 @@ class RolePermissionToggle(BaseModel):
     granted: bool
 
 
+# ─── Branding / white-label ───────────────────────────────────────────────────
+class BrandingOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    brand_name: str
+    brand_tagline: str | None = None
+    logo_url: str | None = None
+    icon_url: str | None = None
+
+
+class BrandingUpdate(BaseModel):
+    brand_name: str | None = None
+    brand_tagline: str | None = None
+    logo_url: str | None = None   # data URL / http URL; send "" to reset to letter
+    icon_url: str | None = None
+
+
 # ─── Dashboard config ─────────────────────────────────────────────────────────
 class WidgetOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)

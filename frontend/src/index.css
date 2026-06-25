@@ -2,56 +2,68 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ─── Design tokens ───────────────────────────────────────────────────────── */
+/* ─── Design tokens — bespoke "graphite + aurora" identity ─────────────────── */
 :root {
   color-scheme: light;
-  --page: #f5f7fb;
+  --page: #f4f5f9;
   --surface: #ffffff;
-  --surface-2: #f8fafc;
-  --border: #e6eaf2;
-  --text: #0f172a;
-  --muted: #64748b;
+  --surface-2: #f6f7fb;
+  --border: #e7e9f2;
+  --text: #131a2b;
+  --muted: #66708a;
+  --brand-1: #4f46e5;   /* indigo  */
+  --brand-2: #7c3aed;   /* violet  */
+  --brand-3: #2563eb;   /* blue    */
+  --aurora: linear-gradient(120deg, var(--brand-3), var(--brand-1) 45%, var(--brand-2));
+  --ring: rgba(79,70,229,.35);
 }
 .dark {
   color-scheme: dark;
-  --page: #070b16;
-  --surface: #0f1626;
-  --surface-2: #0b1120;
-  --border: #1d2740;
-  --text: #e6ecf7;
-  --muted: #8a97b1;
+  --page: #080b14;
+  --surface: #0e1422;
+  --surface-2: #0a0f1c;
+  --border: #1b2438;
+  --text: #e8edf9;
+  --muted: #8995b0;
+  --ring: rgba(124,92,246,.45);
 }
 
 html, body, #root { height: 100%; }
 body {
   background: var(--page);
   color: var(--text);
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
-/* subtle ambient gradient for the enterprise dark feel */
+/* signature ambient field — subtle, asymmetric, not a generic centered glow */
 .dark body {
   background:
-    radial-gradient(1100px 600px at 100% -10%, rgba(59,130,246,0.10), transparent 60%),
-    radial-gradient(900px 500px at -10% 0%, rgba(139,92,246,0.08), transparent 55%),
+    radial-gradient(1200px 520px at 88% -8%, rgba(124,92,246,0.12), transparent 60%),
+    radial-gradient(820px 440px at -6% 4%, rgba(37,99,235,0.10), transparent 55%),
     var(--page);
   background-attachment: fixed;
 }
 
+.font-display { font-family: 'Space Grotesk', 'Inter', sans-serif; letter-spacing: -0.01em; }
+.nums { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+
 @layer components {
   .surface {
+    position: relative;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 1rem;
-    box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+    border-radius: 16px;
+    box-shadow: 0 1px 2px rgb(16 24 40 / 0.04);
   }
-  .dark .surface { box-shadow: 0 1px 0 rgb(255 255 255 / 0.02), 0 8px 24px -12px rgb(0 0 0 / 0.6); }
-  .surface-2 { background: var(--surface-2); border: 1px solid var(--border); border-radius: 0.85rem; }
+  .dark .surface { box-shadow: 0 1px 0 rgb(255 255 255 / 0.03), 0 10px 30px -16px rgb(0 0 0 / 0.7); }
+  .surface-2 { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; }
   .muted { color: var(--muted); }
   .hairline { border-color: var(--border); }
+  .eyebrow { @apply text-[10.5px] font-semibold uppercase tracking-[0.14em] muted; }
 
   .btn { @apply inline-flex items-center justify-center gap-2 rounded-xl px-3.5 py-2 text-sm font-semibold transition; }
-  .btn-primary { @apply btn text-white; background: linear-gradient(135deg,#3b82f6,#4f46e5); }
-  .btn-primary:hover { filter: brightness(1.07); }
+  .btn-primary { @apply btn text-white; background-image: var(--aurora); box-shadow: 0 6px 18px -8px var(--ring); }
+  .btn-primary:hover { filter: brightness(1.08); }
   .btn-ghost { @apply btn; color: var(--muted); }
   .btn-ghost:hover { background: color-mix(in srgb, var(--muted) 12%, transparent); color: var(--text); }
   .chip {
@@ -59,22 +71,34 @@ body {
     background: color-mix(in srgb, var(--muted) 12%, transparent);
   }
   .input {
-    @apply w-full rounded-xl px-3 py-2 text-sm outline-none;
+    @apply w-full rounded-xl px-3 py-2 text-sm outline-none transition;
     background: var(--surface); border: 1px solid var(--border); color: var(--text);
   }
-  .input:focus { box-shadow: 0 0 0 2px #3b82f6; }
+  .input:focus { box-shadow: 0 0 0 3px var(--ring); border-color: transparent; }
   .seg { @apply inline-flex rounded-xl p-0.5; background: var(--surface-2); border: 1px solid var(--border); }
   .seg button { @apply rounded-lg px-3 py-1.5 text-xs font-semibold transition; color: var(--muted); }
-  .seg button[data-active="true"] { background: linear-gradient(135deg,#3b82f6,#4f46e5); color: #fff; }
+  .seg button[data-active="true"] { background-image: var(--aurora); color: #fff; box-shadow: 0 4px 12px -6px var(--ring); }
+
+  /* brand mark — gradient tile with soft glow */
+  .brandmark {
+    background-image: var(--aurora);
+    box-shadow: 0 8px 20px -8px var(--ring), inset 0 1px 0 rgb(255 255 255 / 0.25);
+  }
+  /* KPI accent stripe across the top of a card */
+  .accent-top::before {
+    content: ""; position: absolute; inset: 0 0 auto 0; height: 3px;
+    border-radius: 16px 16px 0 0; background: var(--stripe, var(--aurora)); opacity: .9;
+  }
 }
 
-/* accent icon-chip backgrounds */
-.accent-blue    { color:#60a5fa; background:rgba(59,130,246,.14); }
-.accent-emerald { color:#34d399; background:rgba(16,185,129,.14); }
-.accent-violet  { color:#a78bfa; background:rgba(139,92,246,.14); }
-.accent-amber   { color:#fbbf24; background:rgba(245,158,11,.14); }
-.accent-cyan    { color:#22d3ee; background:rgba(6,182,212,.14); }
-.accent-orange  { color:#fb923c; background:rgba(249,115,22,.14); }
+/* accent icon-chip backgrounds + stripe colors */
+.accent-blue    { color:#60a5fa; background:rgba(37,99,235,.14);  --stripe:linear-gradient(90deg,#2563eb,#60a5fa); }
+.accent-emerald { color:#34d399; background:rgba(16,185,129,.14); --stripe:linear-gradient(90deg,#059669,#34d399); }
+.accent-violet  { color:#a78bfa; background:rgba(124,92,246,.16); --stripe:linear-gradient(90deg,#7c3aed,#a78bfa); }
+.accent-amber   { color:#fbbf24; background:rgba(245,158,11,.16); --stripe:linear-gradient(90deg,#d97706,#fbbf24); }
+.accent-cyan    { color:#22d3ee; background:rgba(6,182,212,.16);  --stripe:linear-gradient(90deg,#0891b2,#22d3ee); }
+.accent-orange  { color:#fb923c; background:rgba(249,115,22,.16); --stripe:linear-gradient(90deg,#ea580c,#fb923c); }
 
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--muted) 35%, transparent); border-radius: 9999px; }
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--muted) 32%, transparent); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--muted) 50%, transparent); }

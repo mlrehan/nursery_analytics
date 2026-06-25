@@ -5,6 +5,7 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import AdminConfig from './pages/AdminConfig'
 import AdminUsers from './pages/AdminUsers'
+import AdminSettings from './pages/AdminSettings'
 import Profile from './pages/Profile'
 
 function Protected({ children, adminOnly }) {
@@ -28,6 +29,7 @@ export default function App() {
         <Route path="/profile" element={<Profile />} />
         <Route path="/admin" element={<Protected adminOnly><AdminConfig /></Protected>} />
         <Route path="/admin/users" element={<Protected adminOnly><AdminUsers /></Protected>} />
+        <Route path="/admin/settings" element={<Protected adminOnly><AdminSettings /></Protected>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

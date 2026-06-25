@@ -3,6 +3,15 @@ import EChart from './EChart'
 import { buildOption, buildSparkline } from '../charts/echartsOptions'
 import { useTheme } from '../context/ThemeContext'
 
+const STRIPES = {
+  blue: 'linear-gradient(90deg,#2563eb,#60a5fa)',
+  emerald: 'linear-gradient(90deg,#059669,#34d399)',
+  violet: 'linear-gradient(90deg,#7c3aed,#a78bfa)',
+  amber: 'linear-gradient(90deg,#d97706,#fbbf24)',
+  cyan: 'linear-gradient(90deg,#0891b2,#22d3ee)',
+  orange: 'linear-gradient(90deg,#ea580c,#fb923c)',
+}
+
 function formatValue(value, unit) {
   if (typeof value === 'string') return value
   if (value === null || value === undefined) return '—'
@@ -45,22 +54,24 @@ function Delta({ delta }) {
 
 function KpiCard({ widget, payload }) {
   const { dark } = useTheme()
+  const accent = payload?.accent || 'blue'
   const spark = payload?.spark
   const sparkOpt = useMemo(
-    () => (spark?.length ? buildSparkline(spark, payload.accent) : null),
-    [spark, payload?.accent, dark],
+    () => (spark?.length ? buildSparkline(spark, accent) : null),
+    [spark, accent, dark],
   )
   return (
-    <div className="surface p-5 flex flex-col justify-between h-full overflow-hidden">
+    <div className="surface accent-top p-5 flex flex-col justify-between h-full overflow-hidden"
+      style={{ '--stripe': STRIPES[accent] || STRIPES.blue }}>
       <div className="flex items-start gap-3">
-        <AccentIcon accent={payload?.accent} unit={payload?.unit} />
+        <AccentIcon accent={accent} unit={payload?.unit} />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium muted truncate">{payload?.label || widget.title}</p>
-          <div className="mt-1 flex items-baseline gap-2 flex-wrap">
-            <span className="text-2xl font-extrabold tracking-tight">{formatValue(payload?.value, payload?.unit)}</span>
+          <p className="eyebrow truncate">{payload?.label || widget.title}</p>
+          <div className="mt-1.5 flex items-baseline gap-2 flex-wrap">
+            <span className="text-[27px] leading-none font-bold font-display nums">{formatValue(payload?.value, payload?.unit)}</span>
             <Delta delta={payload?.delta} />
           </div>
-          {payload?.sub && <p className="mt-0.5 text-xs muted truncate">{payload.sub}</p>}
+          {payload?.sub && <p className="mt-1 text-xs muted truncate">{payload.sub}</p>}
         </div>
         {payload?.status && (
           <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full
@@ -77,10 +88,10 @@ function KpiCard({ widget, payload }) {
 function ChartCard({ widget, children, action }) {
   return (
     <div className="surface p-5 h-full flex flex-col">
-      <div className="mb-2 flex items-start justify-between gap-2">
-        <div>
-          <h3 className="text-sm font-semibold">{widget.title}</h3>
-          {widget.description && <p className="text-xs muted">{widget.description}</p>}
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="text-[15px] font-semibold font-display tracking-tight truncate">{widget.title}</h3>
+          {widget.description && <p className="text-xs muted truncate">{widget.description}</p>}
         </div>
         {action}
       </div>

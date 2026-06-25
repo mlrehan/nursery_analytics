@@ -55,7 +55,8 @@ export default function Dashboard() {
     <div>
       <div className="flex items-start justify-between mb-4 gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight">{module.name}</h1>
+          <div className="eyebrow mb-0.5">Dashboard</div>
+          <h1 className="text-[26px] leading-tight font-bold font-display tracking-tight">{module.name}</h1>
           {module.description && <p className="muted text-sm mt-0.5">{module.description}</p>}
         </div>
         <div className="flex items-center gap-2 text-xs muted">

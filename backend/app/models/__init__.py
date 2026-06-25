@@ -10,6 +10,7 @@ from app.models.auth import (
     RoleWidgetAccess,
 )
 from app.models.dimensions import Site, Room, Child, Parent, Staff, DimDate
+from app.models.settings import AppSettings
 from app.models.facts import (
     Attendance,
     EnrollmentEvent,
@@ -37,6 +38,7 @@ __all__ = [
     "Parent",
     "Staff",
     "DimDate",
+    "AppSettings",
     "Attendance",
     "EnrollmentEvent",
     "Invoice",
