@@ -65,7 +65,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="surface px-4 py-3 mb-5 flex items-center gap-3 sticky top-[4.5rem] z-[5]">
+      <div className="surface px-4 py-3 mb-5 flex items-center gap-3 sticky -top-4 lg:-top-6 z-[5]">
         <FilterBar showPeriod={PERIOD_AWARE.has(moduleKey)} />
       </div>
 

@@ -29,17 +29,20 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
     waitlist = int((children["status"] == "waitlist").sum()) if not children.empty else 0
     rate = pct(safe_div(filled, capacity) * 100)
 
-    # admissions / withdrawals over the selected period
+    # all enrollment events (scoped) — used for admissions/withdrawals and the funnel
     win = scope.window_days
     win_lbl = f"last {win} days"
-    ev = await fetch_df(
-        db,
-        f"""SELECT event_type, event_date FROM fact_enrollment_event
-            WHERE event_date >= :dwin {sc}""",
-        {**p, "dwin": today - dt.timedelta(days=win)},
-    )
-    adm = int((ev["event_type"] == "admission").sum()) if not ev.empty else 0
-    wd = int((ev["event_type"] == "withdrawal").sum()) if not ev.empty else 0
+    win_start = today - dt.timedelta(days=win)
+    all_ev = await fetch_df(
+        db, f"SELECT child_id, event_type, event_date FROM fact_enrollment_event WHERE 1=1 {sc}", p)
+    if not all_ev.empty:
+        all_ev["event_date"] = pd.to_datetime(all_ev["event_date"]).dt.date
+        in_win = all_ev[all_ev["event_date"] >= win_start]
+        adm = int((in_win["event_type"] == "admission").sum())
+        wd = int((in_win["event_type"] == "withdrawal").sum())
+    else:
+        in_win = all_ev
+        adm = wd = 0
 
     # by room type
     by_room_payload = {"categories": [], "series": [{"name": "Filled", "data": []},
@@ -64,15 +67,19 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
         counts = cats.value_counts()
         age_payload["series"][0]["data"] = [int(counts.get(lbl, 0)) for lbl in age_payload["categories"]]
 
-    # waitlist conversion funnel over the selected period
-    ev90 = await fetch_df(
-        db, f"SELECT event_type FROM fact_enrollment_event WHERE event_date >= :dwin {sc}",
-        {**p, "dwin": today - dt.timedelta(days=win)})
-    enquiry = int((ev90["event_type"] == "enquiry").sum()) if not ev90.empty else 0
-    wl = int((ev90["event_type"] == "waitlist_join").sum()) if not ev90.empty else 0
-    enrolled = int((ev90["event_type"] == "admission").sum()) if not ev90.empty else 0
-    funnel = {"data": [{"name": "Enquiries", "value": enquiry},
-                       {"name": "Waitlisted", "value": wl},
+    # waitlist conversion funnel — a true COHORT: take everyone who ENQUIRED in the
+    # window, then count how far that same group progressed. Each stage is a subset of
+    # the previous, so it is always monotonic (Enquiries ≥ Waitlisted ≥ Enrolled).
+    enquiries = waitlisted = enrolled = 0
+    if not all_ev.empty:
+        cohort = set(in_win.loc[in_win["event_type"] == "enquiry", "child_id"])
+        coh = all_ev[all_ev["child_id"].isin(cohort)]
+        enquiries = len(cohort)
+        # reached a waitlist place OR went straight to enrolment
+        waitlisted = int(coh.loc[coh["event_type"].isin(["waitlist_join", "admission"]), "child_id"].nunique())
+        enrolled = int(coh.loc[coh["event_type"] == "admission", "child_id"].nunique())
+    funnel = {"data": [{"name": "Enquiries", "value": enquiries},
+                       {"name": "Waitlisted / Offered", "value": waitlisted},
                        {"name": "Enrolled", "value": enrolled}]}
 
     # occupancy forecast: net enrolled by month from cumulative events + linear forecast

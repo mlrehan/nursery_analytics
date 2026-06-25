@@ -23,12 +23,36 @@ function ThemeBtn() {
   )
 }
 
+/** Sidebar nav item with collapse support + hover tooltip when collapsed. */
+function NavItem({ to, icon, label, collapsed, onClick, end }) {
+  return (
+    <NavLink to={to} end={end} onClick={onClick}
+      className={({ isActive }) =>
+        `group relative flex items-center gap-3 rounded-xl text-sm font-medium transition
+         ${collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2'}
+         ${isActive ? 'text-white' : 'muted hover:text-[var(--text)] hover:bg-[var(--surface-2)]'}`}
+      style={({ isActive }) => isActive ? { background: 'linear-gradient(135deg,rgba(59,130,246,.9),rgba(79,70,229,.9))' } : undefined}>
+      <Icon name={icon} className="w-[18px] h-[18px] shrink-0" />
+      {!collapsed && <span className="truncate">{label}</span>}
+      {collapsed && (
+        <span className="pointer-events-none absolute left-full ml-3 px-2.5 py-1.5 rounded-lg bg-slate-900 text-white
+          text-xs font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition z-50 shadow-xl border border-slate-700">
+          {label}
+        </span>
+      )}
+    </NavLink>
+  )
+}
+
 export default function Layout() {
   const { user, logout, isAdmin } = useAuth()
   const navigate = useNavigate()
   const [modules, setModules] = useState([])
   const [loading, setLoading] = useState(true)
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(false)             // mobile drawer
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('na_sidebar') === '1')
+
+  useEffect(() => { localStorage.setItem('na_sidebar', collapsed ? '1' : '0') }, [collapsed])
 
   useEffect(() => {
     api.get('/dashboards/me').then(({ data }) => {
@@ -38,61 +62,53 @@ export default function Layout() {
   }, []) // eslint-disable-line
 
   const initials = (user?.full_name || 'U').split(' ').map((w) => w[0]).slice(0, 2).join('')
+  const railW = collapsed ? 'lg:w-20' : 'lg:w-64'
 
   return (
     <FilterProvider>
-    <div className="min-h-screen flex">
-      {/* Sidebar */}
-      <aside className={`fixed lg:static z-30 h-screen w-64 shrink-0 flex flex-col transition-transform
+    <div className="h-screen flex overflow-hidden">
+      {/* Sidebar — fixed height, never scrolls away (app-shell pattern) */}
+      <aside className={`fixed lg:static z-30 h-screen w-64 ${railW} shrink-0 flex flex-col transition-all duration-200
         bg-[var(--surface)] border-r hairline ${open ? '' : '-translate-x-full lg:translate-x-0'}`}>
-        <div className="h-16 flex items-center gap-2.5 px-5 border-b hairline">
-          <div className="w-9 h-9 rounded-xl grid place-items-center text-white font-extrabold"
+        <div className={`h-16 flex items-center gap-2.5 border-b hairline ${collapsed ? 'lg:justify-center px-3' : 'px-5'}`}>
+          <div className="w-9 h-9 rounded-xl grid place-items-center text-white font-extrabold shrink-0"
             style={{ background: 'linear-gradient(135deg,#3b82f6,#4f46e5)' }}>N</div>
-          <div>
-            <div className="font-bold leading-tight text-[15px]">Nursery Analytics</div>
-            <div className="text-[11px] muted tracking-wide">ENTERPRISE · LONDON</div>
-          </div>
+          {!collapsed && (
+            <div>
+              <div className="font-bold leading-tight text-[15px]">Nursery Analytics</div>
+              <div className="text-[11px] muted tracking-wide">ENTERPRISE · LONDON</div>
+            </div>
+          )}
         </div>
+
         <nav className="flex-1 overflow-y-auto p-3 space-y-0.5">
           {loading && <div className="px-3 py-2 text-sm muted">Loading…</div>}
           {modules.map((m) => (
-            <NavLink key={m.key} to={`/m/${m.key}`} onClick={() => setOpen(false)}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition ${
-                  isActive ? 'text-white' : 'muted hover:text-[var(--text)]'}`}
-              style={({ isActive }) => isActive
-                ? { background: 'linear-gradient(135deg,rgba(59,130,246,.9),rgba(79,70,229,.9))' }
-                : undefined}>
-              <Icon name={m.icon} className="w-[18px] h-[18px] shrink-0" />
-              <span className="truncate">{m.name}</span>
-            </NavLink>
+            <NavItem key={m.key} to={`/m/${m.key}`} icon={m.icon} label={m.name}
+              collapsed={collapsed} onClick={() => setOpen(false)} />
           ))}
           {isAdmin && (
             <div className="mt-2 border-t hairline pt-3 space-y-0.5">
-              <NavLink to="/admin/users" onClick={() => setOpen(false)}
-                className={({ isActive }) => `flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium ${
-                  isActive ? 'text-blue-500' : 'muted hover:text-[var(--text)]'}`}>
-                <Icon name="users" className="w-[18px] h-[18px]" />
-                <span>User Management</span>
-              </NavLink>
-              <NavLink to="/admin" onClick={() => setOpen(false)} end
-                className={({ isActive }) => `flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium ${
-                  isActive ? 'text-blue-500' : 'muted hover:text-[var(--text)]'}`}>
-                <Icon name="cog" className="w-[18px] h-[18px]" />
-                <span>Roles & Dashboards</span>
-              </NavLink>
+              <NavItem to="/admin/users" icon="users" label="User Management" collapsed={collapsed} onClick={() => setOpen(false)} />
+              <NavItem to="/admin" end icon="cog" label="Roles & Dashboards" collapsed={collapsed} onClick={() => setOpen(false)} />
             </div>
           )}
         </nav>
-        <div className="p-4 border-t hairline text-xs muted">v1.0 · {modules.length} dashboards</div>
+
+        {/* Collapse toggle (desktop only) */}
+        <button onClick={() => setCollapsed((c) => !c)}
+          className="hidden lg:flex items-center gap-2 m-3 px-3 py-2 rounded-xl text-xs font-medium muted hover:bg-[var(--surface-2)] transition"
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+          <svg className={`w-4 h-4 transition-transform ${collapsed ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6" /></svg>
+          {!collapsed && <span>Collapse</span>}
+        </button>
       </aside>
 
       {open && <div className="fixed inset-0 bg-black/50 z-20 lg:hidden" onClick={() => setOpen(false)} />}
 
-      {/* Main */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 sticky top-0 z-10 flex items-center gap-3 px-4 lg:px-6
-          bg-[var(--surface)]/80 backdrop-blur border-b hairline">
+      {/* Right column — header fixed, only main scrolls */}
+      <div className="flex-1 flex flex-col min-w-0 h-screen">
+        <header className="h-16 shrink-0 flex items-center gap-3 px-4 lg:px-6 bg-[var(--surface)] border-b hairline">
           <button className="lg:hidden btn-ghost p-2" onClick={() => setOpen(true)}>
             <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
           </button>
@@ -113,7 +129,7 @@ export default function Layout() {
           </div>
         </header>
 
-        <main className="flex-1 p-4 lg:p-6 overflow-x-hidden">
+        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
           <Outlet context={{ modules }} />
         </main>
       </div>

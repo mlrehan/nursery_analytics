@@ -195,6 +195,27 @@ def seed(force: bool = False) -> None:
                         child_records.append((cid, sid, rid, status, monthly_fee,
                                               funding_type, enroll, rtype, part_time))
 
+            # Open enquiries: prospects in the pipeline who have NOT yet enrolled.
+            # These create a realistic drop-off in the Enquiry → Waitlist → Enrolled funnel.
+            for _ in range(int(RNG.integers(14, 24))):
+                fn, ln = RNG.choice(FIRST_NAMES), RNG.choice(LAST_NAMES)
+                dob = TODAY - dt.timedelta(days=int(RNG.integers(6, 42)) * 30)
+                pid = cur.execute(
+                    "INSERT INTO dim_parent (site_id,first_name,last_name,email,phone) "
+                    "VALUES (%s,%s,%s,%s,%s) RETURNING id",
+                    (sid, RNG.choice(FIRST_NAMES), ln,
+                     f"{fn.lower()}.{ln.lower()}{int(RNG.integers(1,999))}@example.com",
+                     f"07{int(RNG.integers(100000000,999999999))}"),
+                ).fetchone()[0]
+                cid = cur.execute(
+                    "INSERT INTO dim_child (site_id,room_id,parent_id,first_name,last_name,dob,gender,"
+                    "enrollment_date,status,funding_type,monthly_fee,allergies) "
+                    "VALUES (%s,NULL,%s,%s,%s,%s,%s,NULL,'enquiry',%s,0,NULL) RETURNING id",
+                    (sid, pid, fn, ln, dob, RNG.choice(["male", "female"]),
+                     str(RNG.choice(["private", "funded_15", "funded_30"]))),
+                ).fetchone()[0]
+                child_records.append((cid, sid, None, "enquiry", 0.0, "private", None, "toddler", False))
+
         active_children = [c for c in child_records if c[3] == "active"]
         print(f"[seed] {len(child_records)} children ({len(active_children)} active), "
               f"{len(all_staff)} staff, {len(site_ids)} sites")
@@ -218,7 +239,12 @@ def seed(force: bool = False) -> None:
 def _seed_enrollment_events(cur, child_records) -> None:
     rows = []
     for cid, sid, _rid, status, _fee, _fund, enroll, _rt, *_ in child_records:
-        if status == "waitlist":
+        if status == "enquiry":
+            # open enquiry; only ~35% have progressed to a waitlist place so far
+            rows.append((cid, sid, "enquiry", TODAY - dt.timedelta(days=int(RNG.integers(2, 80)))))
+            if RNG.random() < 0.35:
+                rows.append((cid, sid, "waitlist_join", TODAY - dt.timedelta(days=int(RNG.integers(1, 40)))))
+        elif status == "waitlist":
             rows.append((cid, sid, "enquiry", TODAY - dt.timedelta(days=int(RNG.integers(5, 60)))))
             rows.append((cid, sid, "waitlist_join", TODAY - dt.timedelta(days=int(RNG.integers(1, 30)))))
         else:
