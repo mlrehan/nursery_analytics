@@ -42,15 +42,17 @@ export default function ExportShare({ title, moduleKey }) {
     catch { /* ignore */ }
   }
 
-  const url = window.location.href
+  // Social/chat crawlers read OG tags from this public, branded share page (which
+  // then redirects real visitors into the app) → a rich preview card with an image.
+  const shareUrl = `${window.location.origin}/share/${moduleKey}`
   const msg = `${brand_name} — ${title}`
   const e = encodeURIComponent
   const shares = [
-    ['Email', `mailto:?subject=${e(msg)}&body=${e(msg + '\n\nOpen the live dashboard:\n' + url)}`],
-    ['WhatsApp', `https://wa.me/?text=${e(msg + ' — ' + url)}`],
-    ['LinkedIn', `https://www.linkedin.com/sharing/share-offsite/?url=${e(url)}`],
-    ['X', `https://twitter.com/intent/tweet?text=${e(msg)}&url=${e(url)}`],
-    ['Facebook', `https://www.facebook.com/sharer/sharer.php?u=${e(url)}`],
+    ['Email', `mailto:?subject=${e(msg)}&body=${e(msg + '\n\nOpen the dashboard:\n' + shareUrl)}`],
+    ['WhatsApp', `https://wa.me/?text=${e(msg + ' — ' + shareUrl)}`],
+    ['LinkedIn', `https://www.linkedin.com/sharing/share-offsite/?url=${e(shareUrl)}`],
+    ['X', `https://twitter.com/intent/tweet?text=${e(msg)}&url=${e(shareUrl)}`],
+    ['Facebook', `https://www.facebook.com/sharer/sharer.php?u=${e(shareUrl)}`],
   ]
 
   return (

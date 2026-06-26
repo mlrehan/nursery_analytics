@@ -45,6 +45,10 @@ app.add_middleware(
 
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 
+# Public, crawler-friendly share pages (mounted at the site root, no /api prefix)
+from app.api.share import router as share_router  # noqa: E402
+app.include_router(share_router)
+
 
 @app.get("/health", tags=["meta"])
 async def health() -> dict:

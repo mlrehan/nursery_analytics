@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     API_V1_PREFIX: str = "/api/v1"
     RUN_MIGRATIONS_ON_STARTUP: bool = True
     SEED_ON_STARTUP: bool = True
+    # Public base URL (e.g. https://nursery.example.co.uk) — used to build absolute
+    # share/OG-image links. If empty, derived from the incoming request.
+    PUBLIC_BASE_URL: str = ""
 
     # Database
     POSTGRES_USER: str = "nursery"
