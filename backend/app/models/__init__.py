@@ -11,6 +11,7 @@ from app.models.auth import (
 )
 from app.models.dimensions import Site, Room, Child, Parent, Staff, DimDate
 from app.models.settings import AppSettings
+from app.models.share import ShareLink
 from app.models.facts import (
     Attendance,
     EnrollmentEvent,
@@ -39,6 +40,7 @@ __all__ = [
     "Staff",
     "DimDate",
     "AppSettings",
+    "ShareLink",
     "Attendance",
     "EnrollmentEvent",
     "Invoice",

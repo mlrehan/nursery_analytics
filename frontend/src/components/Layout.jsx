@@ -117,6 +117,10 @@ export default function Layout() {
             <NavItem key={m.key} to={`/m/${m.key}`} icon={m.icon} label={m.name}
               collapsed={collapsed} onClick={() => setOpen(false)} />
           ))}
+          <div className="mt-2 border-t hairline pt-3 space-y-0.5">
+            {!collapsed && <div className="eyebrow px-3 pb-2">Sharing</div>}
+            <NavItem to="/shares" icon="chat" label="Shared Links" collapsed={collapsed} onClick={() => setOpen(false)} />
+          </div>
           {isAdmin && (
             <div className="mt-2 border-t hairline pt-3 space-y-0.5">
               {!collapsed && <div className="eyebrow px-3 pb-2">Administration</div>}

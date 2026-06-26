@@ -7,6 +7,7 @@ import AdminConfig from './pages/AdminConfig'
 import AdminUsers from './pages/AdminUsers'
 import AdminSettings from './pages/AdminSettings'
 import Profile from './pages/Profile'
+import ManageShares from './pages/ManageShares'
 import PublicDashboard from './pages/PublicDashboard'
 
 function Protected({ children, adminOnly }) {
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="/" element={<div className="muted">Loading your dashboards…</div>} />
         <Route path="/m/:moduleKey" element={<Dashboard />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/shares" element={<ManageShares />} />
         <Route path="/admin" element={<Protected adminOnly><AdminConfig /></Protected>} />
         <Route path="/admin/users" element={<Protected adminOnly><AdminUsers /></Protected>} />
         <Route path="/admin/settings" element={<Protected adminOnly><AdminSettings /></Protected>} />

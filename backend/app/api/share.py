@@ -18,9 +18,9 @@ from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
-from app.core.security import decode_share_token
 from app.models.auth import DashboardModule
 from app.models.settings import AppSettings
+from app.models.share import ShareLink
 
 router = APIRouter(tags=["share"])
 
@@ -29,15 +29,19 @@ DESCRIPTION = ("Live nursery analytics — occupancy, revenue, attendance, EYFS 
                "staffing and compliance, in one enterprise dashboard.")
 
 
-async def _brand_and_module(module_key: str | None) -> tuple[str, str, str]:
+async def _brand_and_module(token: str) -> tuple[str, str, str]:
     async with AsyncSessionLocal() as db:
         s = await db.get(AppSettings, 1)
         brand = (s.brand_name if s else None) or "Nursery Analytics"
         tagline = (s.brand_tagline if s and s.brand_tagline else TAGLINE_FALLBACK)
         module_name = "Analytics Dashboard"
-        if module_key:
-            m = await db.scalar(select(DashboardModule).where(DashboardModule.key == module_key))
-            module_name = m.name if m else module_name
+        link = await db.get(ShareLink, token)
+        if link:
+            if link.label:
+                module_name = link.label
+            else:
+                m = await db.scalar(select(DashboardModule).where(DashboardModule.key == link.module_key))
+                module_name = m.name if m else module_name
     return brand, tagline, module_name
 
 
@@ -47,9 +51,7 @@ def _base(request: Request) -> str:
 
 @router.get("/share/{token}", response_class=HTMLResponse)
 async def share_page(token: str, request: Request) -> HTMLResponse:
-    payload = decode_share_token(token)
-    module_key = payload.get("m") if payload else None
-    brand, tagline, module_name = await _brand_and_module(module_key)
+    brand, tagline, module_name = await _brand_and_module(token)
 
     base = _base(request)
     page_url = f"{base}share/{token}"
@@ -91,9 +93,7 @@ display:grid;place-items:center;height:100vh;margin:0}}a{{color:#8ab4ff}}</style
 
 @router.get("/share/{token}/image.png")
 async def share_image(token: str) -> Response:
-    payload = decode_share_token(token)
-    module_key = payload.get("m") if payload else None
-    brand, tagline, module_name = await _brand_and_module(module_key)
+    brand, tagline, module_name = await _brand_and_module(token)
     try:
         from app.reports.og_image import build_og_image
         png = build_og_image(brand, tagline, module_name)

@@ -7,8 +7,9 @@ returns the computed analytics payload for one module, scoped by role.
 from __future__ import annotations
 
 import io
+import secrets
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
@@ -20,10 +21,10 @@ from app.analytics.registry import compute_module
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user, get_user_permissions
-from app.core.security import create_share_token
 from app.models.auth import DashboardModule, DashboardWidget, RoleWidgetAccess, User
 from app.models.dimensions import Site
 from app.models.settings import AppSettings
+from app.models.share import ShareLink
 from app.reports.pdf import build_report
 from app.schemas.auth import MeDashboard, ModuleWithWidgets, RoleOut, UserOut, WidgetOut
 
@@ -135,7 +136,8 @@ async def module_data(
     }
 
 
-SHARE_EXPIRES_DAYS = 30
+def _share_base(request: Request) -> str:
+    return (settings.PUBLIC_BASE_URL.rstrip("/") + "/") if settings.PUBLIC_BASE_URL else str(request.base_url)
 
 
 @router.post("/{module_key}/share-link")
@@ -144,20 +146,28 @@ async def create_share_link(
     request: Request,
     site_id: int | None = Query(None),
     days: int | None = Query(None),
+    expires_days: int = Query(30, description="Link lifetime in days; 0 = never expires"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Mint a PUBLIC, no-login share link for this dashboard view (signed token)."""
+    """Mint a PUBLIC, no-login share link for this dashboard view (managed, revocable)."""
     perms = await get_user_permissions(user, db)
     if f"view.{module_key}" not in perms:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not permitted for this module")
     scope = scope_for(user, site_id=site_id, days=days)   # clamps to what the user may see
-    token = create_share_token(
-        {"m": module_key, "site": scope.site_id, "days": scope.window_days, "child": scope.child_id},
-        expires_days=SHARE_EXPIRES_DAYS,
-    )
-    base = (settings.PUBLIC_BASE_URL.rstrip("/") + "/") if settings.PUBLIC_BASE_URL else str(request.base_url)
-    return {"token": token, "url": f"{base}share/{token}", "expires_days": SHARE_EXPIRES_DAYS}
+    module = await db.scalar(select(DashboardModule).where(DashboardModule.key == module_key))
+
+    token = secrets.token_urlsafe(24)
+    expires_at = (datetime.now(timezone.utc) + timedelta(days=expires_days)) if expires_days and expires_days > 0 else None
+    db.add(ShareLink(
+        token=token, module_key=module_key, site_id=scope.site_id, child_id=scope.child_id,
+        window_days=scope.window_days, label=(module.name if module else module_key),
+        created_by=user.id, expires_at=expires_at,
+    ))
+    await db.commit()
+    base = _share_base(request)
+    return {"token": token, "url": f"{base}share/{token}", "expires_days": expires_days,
+            "expires_at": expires_at.isoformat() if expires_at else None}
 
 
 @router.get("/{module_key}/report.pdf")

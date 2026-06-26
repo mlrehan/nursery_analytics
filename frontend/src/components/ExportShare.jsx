@@ -12,10 +12,11 @@ export default function ExportShare({ title, moduleKey }) {
   const [copied, setCopied] = useState(false)
   const [shareUrl, setShareUrl] = useState(null)
   const [minting, setMinting] = useState(false)
+  const [expiresDays, setExpiresDays] = useState(30)
   const ref = useRef(null)
 
-  // a fresh public link is needed whenever the dashboard/filters change
-  useEffect(() => { setShareUrl(null) }, [moduleKey, siteId, days])
+  // a fresh public link is needed whenever the dashboard/filters/expiry change
+  useEffect(() => { setShareUrl(null) }, [moduleKey, siteId, days, expiresDays])
 
   useEffect(() => {
     const onClick = (e) => { if (!ref.current?.contains(e.target)) setOpen(false) }
@@ -28,13 +29,14 @@ export default function ExportShare({ title, moduleKey }) {
     setMinting(true)
     try {
       const { data } = await api.post(`/dashboards/${moduleKey}/share-link`, null,
-        { params: { site_id: siteId || undefined, days } })
+        { params: { site_id: siteId || undefined, days, expires_days: expiresDays } })
       setShareUrl(data.url)
       return data.url
     } catch { return null } finally { setMinting(false) }
   }
 
-  const openMenu = () => { setOpen((o) => !o); if (!open) mintLink() }
+  const openMenu = () => setOpen((o) => !o)
+  useEffect(() => { if (open && !shareUrl && !minting) mintLink() }, [open, shareUrl, minting]) // eslint-disable-line
 
   const downloadPdf = async () => {
     setBusy(true)
@@ -86,8 +88,19 @@ export default function ExportShare({ title, moduleKey }) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-60 surface p-1.5 z-50 shadow-xl">
+        <div className="absolute right-0 top-full mt-2 w-64 surface p-1.5 z-50 shadow-xl">
           <div className="px-2.5 pt-1.5 pb-1 eyebrow">Public link · no login needed</div>
+          <div className="flex items-center justify-between gap-2 px-2.5 py-1.5">
+            <span className="text-xs muted">Expires</span>
+            <select value={expiresDays} onChange={(e) => setExpiresDays(Number(e.target.value))}
+              className="input !py-1 !w-auto text-xs cursor-pointer">
+              <option value={7}>7 days</option>
+              <option value={30}>30 days</option>
+              <option value={90}>90 days</option>
+              <option value={0}>Never</option>
+            </select>
+          </div>
+          <div className="my-1 border-t hairline" />
           {minting && <div className="px-2.5 py-2 text-sm muted">Preparing link…</div>}
           {!minting && (
             <>
