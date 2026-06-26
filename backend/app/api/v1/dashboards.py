@@ -10,15 +10,17 @@ import io
 import time
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.analytics.common import scope_for
 from app.analytics.registry import compute_module
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user, get_user_permissions
+from app.core.security import create_share_token
 from app.models.auth import DashboardModule, DashboardWidget, RoleWidgetAccess, User
 from app.models.dimensions import Site
 from app.models.settings import AppSettings
@@ -131,6 +133,31 @@ async def module_data(
                   "all_sites": scope.all_sites, "window_days": scope.window_days},
         "data": data,
     }
+
+
+SHARE_EXPIRES_DAYS = 30
+
+
+@router.post("/{module_key}/share-link")
+async def create_share_link(
+    module_key: str,
+    request: Request,
+    site_id: int | None = Query(None),
+    days: int | None = Query(None),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Mint a PUBLIC, no-login share link for this dashboard view (signed token)."""
+    perms = await get_user_permissions(user, db)
+    if f"view.{module_key}" not in perms:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not permitted for this module")
+    scope = scope_for(user, site_id=site_id, days=days)   # clamps to what the user may see
+    token = create_share_token(
+        {"m": module_key, "site": scope.site_id, "days": scope.window_days, "child": scope.child_id},
+        expires_days=SHARE_EXPIRES_DAYS,
+    )
+    base = (settings.PUBLIC_BASE_URL.rstrip("/") + "/") if settings.PUBLIC_BASE_URL else str(request.base_url)
+    return {"token": token, "url": f"{base}share/{token}", "expires_days": SHARE_EXPIRES_DAYS}
 
 
 @router.get("/{module_key}/report.pdf")

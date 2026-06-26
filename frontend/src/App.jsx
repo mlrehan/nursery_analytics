@@ -7,6 +7,7 @@ import AdminConfig from './pages/AdminConfig'
 import AdminUsers from './pages/AdminUsers'
 import AdminSettings from './pages/AdminSettings'
 import Profile from './pages/Profile'
+import PublicDashboard from './pages/PublicDashboard'
 
 function Protected({ children, adminOnly }) {
   const { user, loading, isAdmin } = useAuth()
@@ -22,6 +23,8 @@ export default function App() {
   const { user } = useAuth()
   return (
     <Routes>
+      {/* Public, no-login shared dashboard view */}
+      <Route path="/s/:token" element={<PublicDashboard />} />
       <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
       <Route element={<Protected><Layout /></Protected>}>
         <Route path="/" element={<div className="muted">Loading your dashboards…</div>} />

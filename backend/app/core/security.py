@@ -43,6 +43,19 @@ def create_refresh_token(subject: str) -> str:
     return _create_token(subject, timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS), "refresh")
 
 
+def create_share_token(data: dict[str, Any], expires_days: int = 30) -> str:
+    """Signed, unguessable token for a PUBLIC read-only dashboard share.
+    Carries the module + filters so the recipient sees the exact view, no login."""
+    return _create_token(str(data.get("m", "")), timedelta(days=expires_days), "share", data)
+
+
+def decode_share_token(token: str) -> dict[str, Any] | None:
+    payload = decode_token(token)
+    if not payload or payload.get("type") != "share":
+        return None
+    return payload
+
+
 def decode_token(token: str) -> dict[str, Any] | None:
     try:
         return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
