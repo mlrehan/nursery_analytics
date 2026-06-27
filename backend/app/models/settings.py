@@ -17,4 +17,5 @@ class AppSettings(Base):
     brand_tagline: Mapped[str | None] = mapped_column(String(160))
     logo_url: Mapped[str | None] = mapped_column(Text)
     icon_url: Mapped[str | None] = mapped_column(Text)
+    demo_mode: Mapped[bool] = mapped_column(default=True)
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())

@@ -148,6 +148,35 @@ table from [DATABASE.md](DATABASE.md).
 
 ---
 
+## Method D — Connecting popular UK nursery SaaS
+
+You don't replace the nursery's existing system — this dashboard sits **on top** of it
+and reads a copy of the data. Every product below maps to our tables via one of the
+three methods above (API → like Method C, or export → like Method A). Practical routes:
+
+| Vendor | Best route | Notes |
+|---|---|---|
+| **Connect Childcare (iConnect / Connect)** | Reports/CSV export → Method A; ask Connect about their data/API feed | Strong on occupancy, funding & finance exports — maps cleanly to `dim_child` / `fact_invoice`. |
+| **Famly** | **Public REST API** (Famly has a documented API) → Method C | Pull children, attendance, invoices; richest API of the group. |
+| **Tapestry** (FSF) | CSV/PDF export of observations → Method A | EYFS-focused → maps to `fact_eyfs_observation`; limited finance data. |
+| **Blossom Educational** | API / CSV export → Method C or A | Good attendance, EYFS, finance coverage. |
+| **Kinderly** | CSV export → Method A (ask re API) | EYFS + daily diary; meals/attendance map to `fact_meal` / `fact_attendance`. |
+| **Brightwheel** | API / CSV → Method C or A | US-centric; limited UK funding fields — set `funding_type` from billing plan. |
+| **Cheqdin** | CSV export / API → Method A or C | Billing & attendance strong → `fact_invoice`, `fact_attendance`. |
+| **ParentZone / other** | CSV export → Method A | Fragmented; whatever export they offer maps to the matching table. |
+
+**The reality:** most of these don't expose a single tidy "give me everything" API.
+The dependable, vendor-agnostic path for a sale **tomorrow** is:
+1. Ask the nursery to **export CSVs** from their current system (children, attendance,
+   invoices, staff…), 2. map the columns to ours (rename to match the headers in Method A),
+   3. run the importer, 4. schedule a nightly export+import (or build a small API sync
+   per Method C where the vendor has an API, e.g. **Famly**).
+
+> Field mapping is the only real work: e.g. their "Funded 30h" → our `funded_30`,
+> their "left date present" → child `status='withdrawn'`. All target columns are in
+> [DATABASE.md](DATABASE.md). Start with **dimensions** (sites/rooms/children/staff),
+> then **facts** (attendance/invoices/…).
+
 ## How often to refresh
 
 - **Dimensions** (sites, rooms, children, staff): when they change (daily is plenty).

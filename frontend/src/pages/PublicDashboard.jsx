@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import WidgetRenderer from '../components/WidgetRenderer'
+import DemoBanner from '../components/DemoBanner'
 
 const SPAN = { 3: 'md:col-span-3', 4: 'md:col-span-4', 6: 'md:col-span-6', 8: 'md:col-span-8', 12: 'md:col-span-12' }
 
@@ -35,6 +36,7 @@ export default function PublicDashboard() {
   const initials = (r.brand_name || 'N').trim().charAt(0).toUpperCase()
   return (
     <div className="min-h-screen bg-[var(--page)]">
+      <DemoBanner brand={r.brand_name} show={r.demo_mode} />
       {/* Public header */}
       <header className="sticky top-0 z-10 bg-[var(--surface)] border-b hairline">
         <div className="max-w-6xl mx-auto px-4 lg:px-6 h-16 flex items-center gap-3">

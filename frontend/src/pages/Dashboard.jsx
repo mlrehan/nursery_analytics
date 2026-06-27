@@ -4,6 +4,7 @@ import { api } from '../api/client'
 import WidgetRenderer from '../components/WidgetRenderer'
 import FilterBar from '../components/FilterBar'
 import ExportShare from '../components/ExportShare'
+import DrillModal from '../components/DrillModal'
 import { useFilters } from '../context/FilterContext'
 import { useBranding } from '../context/BrandingContext'
 
@@ -25,6 +26,7 @@ export default function Dashboard() {
   const [meta, setMeta] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [drill, setDrill] = useState(null)
 
   const load = useCallback(async () => {
     if (!moduleKey) return
@@ -99,12 +101,14 @@ export default function Dashboard() {
         <div className="print-grid grid grid-cols-1 gap-4 md:grid-cols-12 md:auto-rows-fr">
           {module.widgets.map((w) => (
             <div key={w.key} className={SPAN[w.span] || 'md:col-span-4'}>
-              <WidgetRenderer widget={w} payload={payloads[w.key]} onEvents={makeEvents(w)} />
+              <WidgetRenderer widget={w} payload={payloads[w.key]} onEvents={makeEvents(w)} onDrill={setDrill} />
             </div>
           ))}
           {module.widgets.length === 0 && <div className="muted">No widgets enabled for your role.</div>}
         </div>
       )}
+
+      <DrillModal data={drill} onClose={() => setDrill(null)} />
     </div>
   )
 }

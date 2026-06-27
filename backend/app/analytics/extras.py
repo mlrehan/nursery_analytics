@@ -140,11 +140,16 @@ async def alerts(db: AsyncSession, scope: Scope) -> dict:
         feed.append(["Low", "All clear", "No active alerts"])
     sev_counts = pd.Series([f[0] for f in feed]).value_counts()
     pie = {"data": [{"name": s, "value": int(c)} for s, c in sev_counts.items()]}
+    feed_table = {"columns": ["Severity", "Area", "Detail"], "rows": feed}
+    active = [f for f in feed if f[0] != "Low"]
+    drill = {"title": "Active alerts", "columns": ["Severity", "Area", "Detail"],
+             "rows": active or feed}
     return {
-        "alert.summary": kpi(len([f for f in feed if f[0] != "Low"]), "Active Alerts",
-                             status="warn" if any(f[0] == "High" for f in feed) else "ok"),
+        "alert.summary": kpi(len(active), "Active Alerts",
+                             status="warn" if any(f[0] == "High" for f in feed) else "ok",
+                             drill=drill),
         "alert.by_severity": pie,
-        "alert.list": {"columns": ["Severity", "Area", "Detail"], "rows": feed},
+        "alert.list": feed_table,
     }
 
 

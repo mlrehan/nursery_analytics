@@ -8,6 +8,7 @@ import { useBranding } from '../context/BrandingContext'
 import { FilterProvider } from '../context/FilterContext'
 import Icon from './Icon'
 import SearchBox from './SearchBox'
+import DemoBanner from './DemoBanner'
 
 function ThemeBtn() {
   const { dark, toggle } = useTheme()
@@ -69,7 +70,7 @@ function NavItem({ to, icon, label, collapsed, onClick, end }) {
 
 export default function Layout() {
   const { user, logout, isAdmin } = useAuth()
-  const { brand_name, brand_tagline, logo_url, letter } = useBranding()
+  const { brand_name, brand_tagline, logo_url, letter, demo_mode } = useBranding()
   const navigate = useNavigate()
   const [modules, setModules] = useState([])
   const [loading, setLoading] = useState(true)
@@ -96,9 +97,11 @@ export default function Layout() {
 
   return (
     <FilterProvider>
-    <div className="h-screen flex overflow-hidden">
+    <div className="h-screen flex flex-col overflow-hidden">
+      <DemoBanner brand={brand_name} show={demo_mode} />
+      <div className="flex-1 flex overflow-hidden min-h-0">
       {/* Sidebar — fixed, never scrolls away */}
-      <aside className={`fixed lg:static z-30 h-screen w-64 ${railW} shrink-0 flex flex-col transition-all duration-200
+      <aside className={`fixed lg:static z-30 h-screen lg:h-auto w-64 ${railW} shrink-0 flex flex-col transition-all duration-200
         bg-[var(--surface)] border-r hairline ${open ? '' : '-translate-x-full lg:translate-x-0'}`}>
         <div className={`h-16 flex items-center gap-2.5 border-b hairline ${collapsed ? 'lg:justify-center px-3' : 'px-5'}`}>
           <LogoMark />
@@ -142,7 +145,7 @@ export default function Layout() {
       {open && <div className="fixed inset-0 bg-black/50 z-20 lg:hidden" onClick={() => setOpen(false)} />}
 
       {/* Right column — header fixed, only main scrolls */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen">
+      <div className="flex-1 flex flex-col min-w-0 h-full">
         <header className="app-header h-16 shrink-0 flex items-center gap-3 px-4 lg:px-6 bg-[var(--surface)] border-b hairline">
           <button className="lg:hidden btn-ghost p-2" onClick={() => setOpen(true)}>
             <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
@@ -166,6 +169,7 @@ export default function Layout() {
         <main className="app-main flex-1 overflow-y-auto p-4 lg:p-6">
           <Outlet context={{ modules }} />
         </main>
+      </div>
       </div>
     </div>
     </FilterProvider>

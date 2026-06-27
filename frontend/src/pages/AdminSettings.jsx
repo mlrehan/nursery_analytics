@@ -18,6 +18,7 @@ export default function AdminSettings() {
     api.get('/settings/branding').then(({ data }) => setForm({
       brand_name: data.brand_name || '', brand_tagline: data.brand_tagline || '',
       logo_url: data.logo_url || '', icon_url: data.icon_url || '',
+      demo_mode: data.demo_mode !== false,
     }))
   }, [])
 
@@ -37,7 +38,7 @@ export default function AdminSettings() {
     e.preventDefault(); setSaving(true); setMsg(null)
     try {
       const { data } = await api.put('/settings/branding', form)
-      branding.setBranding({ brand_name: data.brand_name, brand_tagline: data.brand_tagline, logo_url: data.logo_url, icon_url: data.icon_url })
+      branding.setBranding({ brand_name: data.brand_name, brand_tagline: data.brand_tagline, logo_url: data.logo_url, icon_url: data.icon_url, demo_mode: data.demo_mode })
       setMsg({ type: 'ok', text: 'Branding saved — it applies everywhere instantly.' })
     } catch (err) {
       setMsg({ type: 'err', text: err.response?.data?.detail || 'Failed to save' })
@@ -101,6 +102,18 @@ export default function AdminSettings() {
             <button type="button" className="btn-ghost border hairline text-sm" onClick={() => iconRef.current?.click()}>Upload icon</button>
             {form.icon_url && <button type="button" className="btn-ghost text-sm" onClick={() => setForm({ ...form, icon_url: '' })}>Remove</button>}
           </div>
+        </div>
+
+        {/* Demo-data banner toggle */}
+        <div className="surface-2 p-4 flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <div className="text-sm font-medium">Show “fictional data” banner</div>
+            <p className="text-xs muted">Displays a demo notice across the app and shared links. Turn off once real nursery data is loaded.</p>
+          </div>
+          <button type="button" onClick={() => setForm({ ...form, demo_mode: !form.demo_mode })}
+            className={`relative w-11 h-6 rounded-full transition shrink-0 ${form.demo_mode ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-700'}`}>
+            <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${form.demo_mode ? 'translate-x-5' : ''}`} />
+          </button>
         </div>
 
         <div className="flex items-center gap-3 border-t hairline pt-5">

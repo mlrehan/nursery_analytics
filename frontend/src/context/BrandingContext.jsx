@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback } from 'rea
 import { api } from '../api/client'
 
 const BrandingContext = createContext()
-const DEFAULTS = { brand_name: 'Nursery Analytics', brand_tagline: 'Early Years Intelligence', logo_url: null, icon_url: null }
+const DEFAULTS = { brand_name: 'Nursery Analytics', brand_tagline: 'Early Years Intelligence', logo_url: null, icon_url: null, demo_mode: true }
 
 export function BrandingProvider({ children }) {
   const [branding, setBranding] = useState(DEFAULTS)

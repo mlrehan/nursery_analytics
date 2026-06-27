@@ -100,9 +100,11 @@ def safe_div(a: float, b: float) -> float:
 
 def kpi(value, label: str, unit: str = "", delta: float | None = None,
         sub: str | None = None, status: str | None = None,
-        spark: list | None = None, accent: str | None = None) -> dict:
+        spark: list | None = None, accent: str | None = None,
+        drill: dict | None = None) -> dict:
     """KPI card payload. `delta` is a % vs previous period; `spark` is a small
-    series for the mini sparkline; `accent` hints the icon-chip colour."""
+    series for the mini sparkline; `accent` hints the icon-chip colour; `drill`
+    is an optional {title, columns, rows} table shown when the card is clicked."""
     out = {"value": value, "label": label, "unit": unit}
     if delta is not None:
         out["delta"] = round(float(delta), 1)
@@ -114,6 +116,8 @@ def kpi(value, label: str, unit: str = "", delta: float | None = None,
         out["spark"] = [round(float(x), 2) for x in spark]
     if accent:
         out["accent"] = accent
+    if drill and drill.get("rows"):
+        out["drill"] = drill
     return out
 
 

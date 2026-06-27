@@ -85,7 +85,7 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
         "exec.revenue_mtd": kpi(billed_mtd, "Revenue (MTD)", unit="£", accent="emerald",
                                 spark=rev_spark or None, delta=rev_delta, sub="vs last month"),
         "exec.arrears": kpi(arrears, "Arrears", unit="£", status="warn" if arrears > 0 else "ok",
-                            accent="amber"),
+                            accent="amber", drill=fin.get("_arrears_detail")),
         "exec.revenue_trend": rev_trend,
         "exec.profit": kpi(profit, "Profit Estimate (MTD)", unit="£",
                            status="ok" if profit >= 0 else "warn", sub="income − payroll − overhead",
@@ -94,7 +94,8 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
                                   unit="£", accent="emerald", sub="monthly average"),
         "exec.waitlist": kpi(occ["_waitlist"], "Waiting List", accent="cyan"),
         "exec.staff_status": kpi(staff_status, "Staff Coverage",
-                                 status="ok" if staff_status == "Safe" else "warn", accent="orange"),
+                                 status="ok" if staff_status == "Safe" else "warn", accent="orange",
+                                 drill=stf.get("_ratio_detail")),
         "exec.alerts": {"columns": ["Area", "Detail", "Severity"], "rows": alerts},
         "exec.site_breakdown": site_bar,
     }

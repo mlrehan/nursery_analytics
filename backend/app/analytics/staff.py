@@ -52,10 +52,12 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
     staff_room = shifts[(shifts["date"] == last_shift_date) & (~shifts["absent"])] if not shifts.empty else pd.DataFrame()
     staff_map = staff_room.groupby("room_id")["staff_id"].nunique().to_dict() if not staff_room.empty else {}
     compliant = total_rooms = 0
+    at_risk_rows = []
     if not rooms.empty:
         for _, rm in rooms.iterrows():
             present = present_map.get(rm["id"], 0)
-            staff_n = max(staff_map.get(rm["id"], 0), 1)
+            staff_actual = staff_map.get(rm["id"], 0)
+            staff_n = max(staff_actual, 1)
             actual_ratio = safe_div(present, staff_n)
             ratio_room["categories"].append(rm["name"])
             ratio_room["series"][0]["data"].append(round(actual_ratio, 1))
@@ -63,7 +65,15 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
             total_rooms += 1
             if actual_ratio <= rm["required_ratio"]:
                 compliant += 1
+            else:
+                need = -(-present // rm["required_ratio"])   # ceil(present/required)
+                at_risk_rows.append([rm["name"], int(present), int(staff_actual),
+                                     f"1:{int(rm['required_ratio'])}",
+                                     f"+{int(need - staff_actual)} staff needed"])
     ratio_compliance = pct(safe_div(compliant, total_rooms) * 100) if total_rooms else 100.0
+    ratio_drill = {"title": "Rooms below required ratio",
+                   "columns": ["Room", "Children present", "Staff on duty", "Required ratio", "Action"],
+                   "rows": at_risk_rows}
 
     # qualification mix
     quals = await fetch_df(
@@ -84,9 +94,13 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
         util["series"][0]["data"] = [round(float(v), 1) for v in wk["worked"]]
         util["series"][1]["data"] = [round(float(v), 1) for v in wk["sched"]]
 
+    ratio_gauge = gauge(ratio_compliance, "Ratio Compliance")
+    if ratio_drill["rows"]:
+        ratio_gauge["drill"] = ratio_drill
+
     return {
         "staff.on_duty": kpi(on_duty, "On Duty Today", sub="as of today"),
-        "staff.ratio": gauge(ratio_compliance, "Ratio Compliance"),
+        "staff.ratio": ratio_gauge,
         "staff.absence": kpi(absence_rate, "Absence Rate", unit="%", sub=win_lbl,
                              status="warn" if absence_rate > 8 else "ok"),
         "staff.overtime": kpi(overtime, "Overtime Hours", sub=win_lbl),
@@ -96,4 +110,5 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
         "staff.payroll": kpi(payroll, "Payroll Cost", unit="£", sub=win_lbl),
         "staff.agency": kpi(agency_pct, "Agency Usage", unit="%"),
         "_ratio_compliance": ratio_compliance, "_on_duty": on_duty,
+        "_ratio_detail": ratio_drill,
     }

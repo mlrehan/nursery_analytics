@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useBranding } from '../context/BrandingContext'
+import DemoBanner from '../components/DemoBanner'
 
 const DEMO = [
   ['Administrator', 'admin@lait.org.uk', 'Admin123!'],
@@ -13,7 +14,7 @@ const DEMO = [
 
 export default function Login() {
   const { login } = useAuth()
-  const { brand_name, brand_tagline, logo_url, letter } = useBranding()
+  const { brand_name, brand_tagline, logo_url, letter, demo_mode } = useBranding()
   const navigate = useNavigate()
   const [email, setEmail] = useState('admin@lait.org.uk')
   const [password, setPassword] = useState('Admin123!')
@@ -34,7 +35,9 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-2 bg-[var(--page)]">
+    <div className="min-h-screen flex flex-col bg-[var(--page)]">
+    <DemoBanner brand={brand_name} show={demo_mode} />
+    <div className="flex-1 grid lg:grid-cols-2">
       {/* Brand panel */}
       <div className="relative hidden lg:flex flex-col justify-between p-12 text-white overflow-hidden"
         style={{ backgroundImage: 'linear-gradient(135deg,#1e1b4b 0%,#3730a3 45%,#6d28d9 100%)' }}>
@@ -103,6 +106,7 @@ export default function Login() {
           </div>
         </div>
       </div>
+    </div>
     </div>
   )
 }

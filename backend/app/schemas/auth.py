@@ -102,6 +102,7 @@ class BrandingOut(BaseModel):
     brand_tagline: str | None = None
     logo_url: str | None = None
     icon_url: str | None = None
+    demo_mode: bool = True
 
 
 class BrandingUpdate(BaseModel):
@@ -109,6 +110,7 @@ class BrandingUpdate(BaseModel):
     brand_tagline: str | None = None
     logo_url: str | None = None   # data URL / http URL; send "" to reset to letter
     icon_url: str | None = None
+    demo_mode: bool | None = None
 
 
 # ─── Dashboard config ─────────────────────────────────────────────────────────

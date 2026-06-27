@@ -68,6 +68,7 @@ async def public_report(token: str = Query(...)) -> dict:
         branding = await db.get(AppSettings, 1)
         brand_name = (branding.brand_name if branding else None) or "Nursery Analytics"
         logo_url = branding.logo_url if branding else None
+        demo_mode = bool(branding.demo_mode) if branding else True
 
         site_label = "All sites"
         if scope.site_id:
@@ -80,6 +81,7 @@ async def public_report(token: str = Query(...)) -> dict:
     return {
         "brand_name": brand_name,
         "logo_url": logo_url,
+        "demo_mode": demo_mode,
         "module_key": module_key,
         "module_name": module.name,
         "module_description": module.description,

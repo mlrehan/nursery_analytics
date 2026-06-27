@@ -106,6 +106,24 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
     active_count = int(ch["n"].sum()) if not ch.empty else 0
     rev_per_child = round(billed_mtd / active_count, 2) if active_count else 0
 
+    # full arrears detail (every invoice with an unpaid balance) — used as the
+    # click-through drill on the Arrears / Outstanding Debt KPI
+    arr_rows = []
+    if not outstanding.empty:
+        ad = outstanding.copy()
+        ad["child"] = ad["first_name"] + " " + ad["last_name"]
+        ad = ad.sort_values("outstanding", ascending=False).head(200)
+        for _, r in ad.iterrows():
+            due = pd.to_datetime(r["due_date"]).date()
+            days_over = (today - due).days
+            arr_rows.append([r["child"], f"£{float(r['outstanding']):,.2f}",
+                             due.strftime("%d %b %Y"),
+                             f"{days_over}d overdue" if days_over > 0 else "Not yet due",
+                             r["period_month"].strftime("%b %Y")])
+    arrears_drill = {"title": "Outstanding balances (arrears)",
+                     "columns": ["Child", "Outstanding", "Due date", "Status", "Billing month"],
+                     "rows": arr_rows}
+
     # late payment alerts table — overdue invoices that still have a balance
     overdue = inv[(inv["status"] == "overdue") & (inv["outstanding"] > 0.01)].copy()
     rows = []
@@ -121,7 +139,7 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
         "fin.billed": kpi(round(billed_mtd, 2), "Billed This Month", unit="£", sub="this calendar month"),
         "fin.collected": kpi(round(collected, 2), "Collected", unit="£", sub=win_lbl),
         "fin.arrears": kpi(round(arrears, 2), "Outstanding Debt", unit="£", sub="as of today",
-                           status="warn" if arrears > 0 else "ok"),
+                           status="warn" if arrears > 0 else "ok", drill=arrears_drill),
         "fin.success_rate": gauge(success_rate, "Payment Success"),
         "fin.paid_unpaid": pie,
         "fin.aged": aged,
@@ -132,7 +150,7 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
         "fin.rev_per_child": kpi(rev_per_child, "Revenue per Child", unit="£", accent="emerald", sub="monthly average"),
         "fin.revenue_trend": rev_trend,
         "_billed_mtd": round(billed_mtd, 2), "_arrears": round(arrears, 2),
-        "_rev_trend": rev_trend,
+        "_rev_trend": rev_trend, "_arrears_detail": arrears_drill,
     }
 
 

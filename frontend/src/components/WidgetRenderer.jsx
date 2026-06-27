@@ -52,16 +52,20 @@ function Delta({ delta }) {
   )
 }
 
-function KpiCard({ widget, payload }) {
+function KpiCard({ widget, payload, onDrill }) {
   const { dark } = useTheme()
   const accent = payload?.accent || 'blue'
   const spark = payload?.spark
+  const drill = payload?.drill
+  const clickable = drill && drill.rows && drill.rows.length > 0
   const sparkOpt = useMemo(
     () => (spark?.length ? buildSparkline(spark, accent) : null),
     [spark, accent, dark],
   )
   return (
-    <div className="surface accent-top p-5 flex flex-col justify-between h-full overflow-hidden"
+    <div onClick={clickable ? () => onDrill(drill) : undefined}
+      className={`surface accent-top p-5 flex flex-col justify-between h-full overflow-hidden transition
+        ${clickable ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-md' : ''}`}
       style={{ '--stripe': STRIPES[accent] || STRIPES.blue }}>
       <div className="flex items-start gap-3">
         <AccentIcon accent={accent} unit={payload?.unit} />
@@ -81,6 +85,12 @@ function KpiCard({ widget, payload }) {
         )}
       </div>
       {sparkOpt && <div className="mt-3 -mb-1"><EChart option={sparkOpt} height={44} /></div>}
+      {clickable && (
+        <div className="mt-2 text-[11px] font-semibold text-[color:var(--brand-1)] flex items-center gap-1">
+          View {drill.rows.length} details
+          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M9 6l6 6-6 6" /></svg>
+        </div>
+      )}
     </div>
   )
 }
@@ -133,7 +143,7 @@ function TableCard({ widget, payload }) {
   )
 }
 
-export default function WidgetRenderer({ widget, payload, onEvents }) {
+export default function WidgetRenderer({ widget, payload, onEvents, onDrill }) {
   const { dark } = useTheme()
   const option = useMemo(() => buildOption(widget.viz_type, payload, dark), [widget.viz_type, payload, dark])
 
@@ -141,11 +151,21 @@ export default function WidgetRenderer({ widget, payload, onEvents }) {
 
   switch (widget.viz_type) {
     case 'kpi':
-      return <KpiCard widget={widget} payload={payload} />
+      return <KpiCard widget={widget} payload={payload} onDrill={onDrill} />
     case 'table':
       return <TableCard widget={widget} payload={payload} />
-    case 'gauge':
-      return <ChartCard widget={widget}><EChart option={option} height={210} /></ChartCard>
+    case 'gauge': {
+      const drill = payload?.drill
+      const clickable = !!(onDrill && drill && drill.rows && drill.rows.length)
+      return (
+        <div className={`h-full ${clickable ? 'cursor-pointer' : ''}`}
+          onClick={clickable ? () => onDrill(drill) : undefined}>
+          <ChartCard widget={widget} action={clickable ? <span className="chip text-[10px]">view details →</span> : null}>
+            <EChart option={option} height={210} />
+          </ChartCard>
+        </div>
+      )
+    }
     default:
       return (
         <ChartCard widget={widget} action={onEvents ? <span className="chip text-[10px]">click to filter</span> : null}>
