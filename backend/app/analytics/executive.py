@@ -19,7 +19,13 @@ async def compute(db: AsyncSession, scope: Scope) -> dict:
     filled = occ["_filled"]
     billed_mtd = fin["_billed_mtd"]
     arrears = fin["_arrears"]
-    payroll = stf["staff.payroll"]["value"]
+
+    # MONTHLY payroll (contractual) — must match the one-month revenue, not the
+    # period-window worked-hours figure, or profit mixes timeframes.
+    pay = await fetch_df(
+        db, f"SELECT COALESCE(SUM(contract_hours*hourly_rate*4.33),0) c FROM dim_staff "
+            f"WHERE employment_status='active' {scope.site_clause()}", scope.params)
+    payroll = float(pay["c"].iloc[0])
 
     # overhead (monthly) for scoped sites
     ov = await fetch_df(

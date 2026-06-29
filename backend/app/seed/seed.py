@@ -99,7 +99,9 @@ def seed(force: bool = False) -> None:
         profile_by_site: dict[int, tuple[float, float, float]] = {}
         for name, borough, postcode, fill, pay_health, inc_factor in BOROUGHS:
             cap = int(ROOM_DEFS[0][2] + ROOM_DEFS[1][2] + ROOM_DEFS[2][2])
-            overhead = float(RNG.integers(28000, 42000))
+            # monthly non-staff overhead (rent, utilities, food, insurance) — realistic
+            # for a single London site so most branches run a healthy profit
+            overhead = float(RNG.integers(9000, 16000))
             sid = cur.execute(
                 "INSERT INTO dim_site (name,borough,postcode,capacity,opened_on,monthly_overhead) "
                 "VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
@@ -236,24 +238,41 @@ def seed(force: bool = False) -> None:
 
 
 # ─── fact generators ─────────────────────────────────────────────────────────
+def _enquiry_source() -> str:
+    return str(RNG.choice(["Google", "Referral", "Walk-in", "Social media", "Other"],
+                          p=[0.40, 0.25, 0.15, 0.12, 0.08]))
+
+
 def _seed_enrollment_events(cur, child_records) -> None:
+    # rows: (child_id, site_id, event_type, event_date, source)  — source only on enquiry
     rows = []
     for cid, sid, _rid, status, _fee, _fund, enroll, _rt, *_ in child_records:
         if status == "enquiry":
-            # open enquiry; only ~35% have progressed to a waitlist place so far
-            rows.append((cid, sid, "enquiry", TODAY - dt.timedelta(days=int(RNG.integers(2, 80)))))
+            enq = TODAY - dt.timedelta(days=int(RNG.integers(2, 80)))
+            rows.append((cid, sid, "enquiry", enq, _enquiry_source()))
+            if RNG.random() < 0.45:   # came in for a show-round
+                rows.append((cid, sid, "visit", enq + dt.timedelta(days=int(RNG.integers(2, 14))), None))
             if RNG.random() < 0.35:
-                rows.append((cid, sid, "waitlist_join", TODAY - dt.timedelta(days=int(RNG.integers(1, 40)))))
+                rows.append((cid, sid, "waitlist_join", TODAY - dt.timedelta(days=int(RNG.integers(1, 40))), None))
         elif status == "waitlist":
-            rows.append((cid, sid, "enquiry", TODAY - dt.timedelta(days=int(RNG.integers(5, 60)))))
-            rows.append((cid, sid, "waitlist_join", TODAY - dt.timedelta(days=int(RNG.integers(1, 30)))))
+            enq = TODAY - dt.timedelta(days=int(RNG.integers(5, 60)))
+            rows.append((cid, sid, "enquiry", enq, _enquiry_source()))
+            if RNG.random() < 0.7:
+                rows.append((cid, sid, "visit", enq + dt.timedelta(days=int(RNG.integers(2, 12))), None))
+            rows.append((cid, sid, "waitlist_join", TODAY - dt.timedelta(days=int(RNG.integers(1, 30))), None))
         else:
-            rows.append((cid, sid, "enquiry", enroll - dt.timedelta(days=int(RNG.integers(20, 90)))))
-            rows.append((cid, sid, "admission", enroll))
+            enq = enroll - dt.timedelta(days=int(RNG.integers(20, 90)))
+            rows.append((cid, sid, "enquiry", enq, _enquiry_source()))
+            if RNG.random() < 0.82:   # most enrolled families visited first
+                rows.append((cid, sid, "visit", enq + dt.timedelta(days=int(RNG.integers(3, 20))), None))
+            if RNG.random() < 0.55:   # ~half were waitlisted before a place opened
+                rows.append((cid, sid, "waitlist_join", enroll - dt.timedelta(days=int(RNG.integers(5, 40))), None))
+            rows.append((cid, sid, "admission", enroll, None))
             if status == "withdrawn":
-                rows.append((cid, sid, "withdrawal", enroll + dt.timedelta(days=int(RNG.integers(120, 400)))))
+                rows.append((cid, sid, "withdrawal", enroll + dt.timedelta(days=int(RNG.integers(120, 400))), None))
     cur.executemany(
-        "INSERT INTO fact_enrollment_event (child_id,site_id,event_type,event_date) VALUES (%s,%s,%s,%s)", rows)
+        "INSERT INTO fact_enrollment_event (child_id,site_id,event_type,event_date,source) "
+        "VALUES (%s,%s,%s,%s,%s)", rows)
 
 
 def _seasonal_factor(d: dt.date) -> float:
